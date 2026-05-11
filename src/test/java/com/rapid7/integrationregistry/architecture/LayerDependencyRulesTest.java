@@ -26,7 +26,7 @@ class LayerDependencyRulesTest {
     static final ArchRule coordinatorLayer_shouldNotDependOnDisallowedLayers =
             noClasses().that().resideInAPackage("..coordinator..")
                     .should().dependOnClassesThat().resideInAnyPackage(
-                            "..controller..", "..aggregator..", "..mapping..");
+                            "..controller..", "..service..", "..aggregator..", "..mapping..");
 
     @ArchTest
     static final ArchRule aggregatorLayer_shouldOnlyDependOnMapping =
