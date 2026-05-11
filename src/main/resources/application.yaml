@@ -1,0 +1,30 @@
+spring:
+  application:
+    name: integration-registry
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+
+---
+spring:
+  config:
+    activate:
+      on-profile: staging
+
+---
+spring:
+  config:
+    activate:
+      on-profile: production
