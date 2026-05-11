@@ -1,0 +1,35 @@
+package com.rapid7.integrationregistry.architecture;
+
+import com.tngtech.archunit.lang.ArchRule;
+
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+
+final class LayerDependencyRules {
+
+    static final ArchRule controllerLayer_shouldNotDependOnInternalLayers =
+            noClasses().that().resideInAPackage("..controller..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "..coordinator..", "..adapter..", "..aggregator..", "..mapping..");
+
+    static final ArchRule serviceLayer_shouldNotDependOnWebLayer =
+            noClasses().that().resideInAPackage("..service..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "jakarta.servlet..", "org.springframework.web..", "org.springframework.http..");
+
+    static final ArchRule coordinatorLayer_shouldNotDependOnDisallowedLayers =
+            noClasses().that().resideInAPackage("..coordinator..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "..controller..", "..service..", "..aggregator..", "..mapping..");
+
+    static final ArchRule aggregatorLayer_shouldNotDependOnNonMappingLayers =
+            noClasses().that().resideInAPackage("..aggregator..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "..controller..", "..service..", "..coordinator..", "..adapter..");
+
+    static final ArchRule adapterLayer_shouldNotDependOnInternalLayers =
+            noClasses().that().resideInAPackage("..adapter..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "..controller..", "..service..", "..coordinator..", "..aggregator..", "..mapping..");
+
+    private LayerDependencyRules() {}
+}

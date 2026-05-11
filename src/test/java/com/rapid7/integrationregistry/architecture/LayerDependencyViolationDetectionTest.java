@@ -5,7 +5,6 @@ import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.lang.EvaluationResult;
 import org.junit.jupiter.api.Test;
 
-import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LayerDependencyViolationDetectionTest {
@@ -15,9 +14,7 @@ class LayerDependencyViolationDetectionTest {
 
     @Test
     void controllerLayer_shouldDetectCoordinatorViolation() {
-        EvaluationResult result = noClasses().that().resideInAPackage("..controller..")
-                .should().dependOnClassesThat().resideInAnyPackage(
-                        "..coordinator..", "..adapter..", "..aggregator..", "..mapping..")
+        EvaluationResult result = LayerDependencyRules.controllerLayer_shouldNotDependOnInternalLayers
                 .evaluate(allClasses);
 
         assertTrue(result.hasViolation(),
@@ -26,9 +23,7 @@ class LayerDependencyViolationDetectionTest {
 
     @Test
     void serviceLayer_shouldDetectHttpViolation() {
-        EvaluationResult result = noClasses().that().resideInAPackage("..service..")
-                .should().dependOnClassesThat().resideInAnyPackage(
-                        "jakarta.servlet..", "org.springframework.web..", "org.springframework.http..")
+        EvaluationResult result = LayerDependencyRules.serviceLayer_shouldNotDependOnWebLayer
                 .evaluate(allClasses);
 
         assertTrue(result.hasViolation(),
