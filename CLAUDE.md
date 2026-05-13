@@ -83,3 +83,14 @@ FanOutCoordinator → IntegrationAdapter[] (autowired set)
 - Controller: `@WebMvcTest`
 - Service / Coordinator / Aggregator: plain JUnit with mocked collaborators
 - Adapters: contract tests against fixture data
+
+### Quality gates
+
+| Gate | Tool | Fails on |
+|------|------|----------|
+| Architecture | ArchUnit | Layer boundary violations (RFC-001) |
+| Code quality | PMD | Rule violations in `pmd-ruleset.xml` |
+
+**PMD ruleset provenance**: Curated from scratch targeting LLM/agentic development failure modes — empty catch blocks, hallucination residue (unused code), structural bloat, placeholder leftovers. Not pulled from another platform service (none had PMD configured).
+
+**Suppressing a rule**: Annotate the specific method with `@SuppressWarnings("PMD.<RuleName>")`. Keep suppressions local and justified.
