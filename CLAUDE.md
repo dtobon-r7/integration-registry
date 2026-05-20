@@ -10,8 +10,10 @@ Read-only aggregation layer for third-party integration metadata across Rapid7 p
 
 ## Build
 
+Requires JDK 25 on `JAVA_HOME` (the pom targets Java 25; ArchUnit 1.4.2 and PMD 7.17.0 read class file major version 69).
+
 ```bash
-./mvnw verify          # full build + tests
+./mvnw verify          # full build + tests + ArchUnit + PMD
 ./mvnw package         # build JAR (skip tests: -DskipTests)
 ./mvnw clean           # clean target/
 ```
@@ -92,5 +94,7 @@ FanOutCoordinator → IntegrationAdapter[] (autowired set)
 | Code quality | PMD | Rule violations in `pmd-ruleset.xml` |
 
 **PMD ruleset provenance**: Curated from scratch targeting LLM/agentic development failure modes — empty catch blocks, hallucination residue (unused code), structural bloat, placeholder leftovers. Not pulled from another platform service (none had PMD configured).
+
+**Versions**: maven-pmd-plugin 3.28.0; PMD engine pinned to `pmd-core` + `pmd-java` 7.17.0 in the plugin's `<dependencies>`. `<targetJdk>` flows from the project-level `${java.version}` property.
 
 **Suppressing a rule**: Annotate the specific method with `@SuppressWarnings("PMD.<RuleName>")`. Keep suppressions local and justified.

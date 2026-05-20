@@ -1,0 +1,108 @@
+<?xml version="1.0"?>
+<ruleset name="Integration Registry — Agentic Development Quality Gate"
+    xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0
+    https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
+
+    <description>
+        PMD rules curated for LLM/agentic-driven development. Targets the most common
+        failure modes of AI-generated Java code: silent exception swallowing, hallucination
+        residue (unused code), structural bloat, and placeholder leftovers.
+        Note: `IdenticalCatchBranches` lives under `codestyle.xml` in PMD 7.x (moved from `errorprone.xml`).
+    </description>
+
+    <!-- Exception handling, logging, dead code, control flow -->
+
+    <!-- Exception handling -->
+    <rule ref="category/java/errorprone.xml/EmptyCatchBlock" />
+    <rule ref="category/java/errorprone.xml/AvoidCatchingThrowable" />
+    <rule ref="category/java/design.xml/AvoidCatchingGenericException" />
+    <rule ref="category/java/design.xml/AvoidThrowingRawExceptionTypes" />
+    <rule ref="category/java/errorprone.xml/CloseResource" />
+
+    <!-- Logging hygiene -->
+    <rule ref="category/java/bestpractices.xml/SystemPrintln" />
+    <rule ref="category/java/bestpractices.xml/AvoidPrintStackTrace" />
+
+    <!-- Dead/unused code (hallucination residue) -->
+    <rule ref="category/java/bestpractices.xml/UnusedLocalVariable" />
+    <rule ref="category/java/bestpractices.xml/UnusedAssignment" />
+    <rule ref="category/java/bestpractices.xml/UnusedPrivateMethod" />
+    <rule ref="category/java/bestpractices.xml/UnusedPrivateField" />
+    <rule ref="category/java/bestpractices.xml/UnusedFormalParameter" />
+    <rule ref="category/java/codestyle.xml/UnnecessaryImport" />
+
+    <!-- Control flow -->
+    <rule ref="category/java/errorprone.xml/ImplicitSwitchFallThrough" />
+
+    <!-- Structural design, correctness, placeholder detection -->
+    <rule ref="category/java/design.xml/GodClass" />
+    <rule ref="category/java/design.xml/CyclomaticComplexity">
+        <properties>
+            <property name="methodReportLevel" value="10" />
+        </properties>
+    </rule>
+    <rule ref="category/java/design.xml/CognitiveComplexity">
+        <properties>
+            <property name="reportLevel" value="15" />
+        </properties>
+    </rule>
+    <rule ref="category/java/design.xml/NcssCount">
+        <properties>
+            <property name="methodReportLevel" value="40" />
+        </properties>
+    </rule>
+    <!-- ExcessiveParameterList: PMD 7.17.0 default (10) is used; no override property is exposed on this rule -->
+    <rule ref="category/java/design.xml/ExcessiveParameterList" />
+    <rule ref="category/java/design.xml/AvoidDeeplyNestedIfStmts">
+        <properties>
+            <property name="problemDepth" value="3" />
+        </properties>
+    </rule>
+    <rule ref="category/java/design.xml/CouplingBetweenObjects">
+        <properties>
+            <property name="threshold" value="15" />
+        </properties>
+    </rule>
+    <!-- TooManyMethods/TooManyFields: PMD 7.17.0 defaults (10/15) are used; properties exposed by these rules -->
+    <!-- in this version are not configurable from a ruleset XML — see PMD docs for current API. -->
+    <rule ref="category/java/design.xml/TooManyMethods" />
+    <rule ref="category/java/design.xml/TooManyFields" />
+
+    <!-- Correctness -->
+    <rule ref="category/java/errorprone.xml/AvoidDuplicateLiterals" />
+    <rule ref="category/java/errorprone.xml/InvalidLogMessageFormat" />
+    <rule ref="category/java/errorprone.xml/ReturnEmptyCollectionRatherThanNull" />
+    <rule ref="category/java/bestpractices.xml/MissingOverride" />
+    <rule ref="category/java/design.xml/UselessOverridingMethod" />
+    <rule ref="category/java/design.xml/MutableStaticState" />
+    <rule ref="category/java/errorprone.xml/ConstructorCallsOverridableMethod" />
+
+    <!-- Placeholder detection -->
+    <rule ref="category/java/documentation.xml/CommentContent">
+        <properties>
+            <property name="forbiddenRegex" value="TODO|FIXME|HACK|XXX" />
+        </properties>
+    </rule>
+
+    <!-- Performance, subtle correctness, threading -->
+    <rule ref="category/java/performance.xml/StringInstantiation" />
+    <rule ref="category/java/performance.xml/AvoidInstantiatingObjectsInLoops" />
+    <rule ref="category/java/performance.xml/RedundantFieldInitializer" />
+    <rule ref="category/java/performance.xml/UseStringBufferForStringAppends" />
+
+    <!-- Subtle correctness -->
+    <rule ref="category/java/codestyle.xml/IdenticalCatchBranches" />
+    <rule ref="category/java/errorprone.xml/IdempotentOperations" />
+    <rule ref="category/java/errorprone.xml/CompareObjectsWithEquals" />
+    <rule ref="category/java/errorprone.xml/OverrideBothEqualsAndHashcode" />
+    <rule ref="category/java/bestpractices.xml/LiteralsFirstInComparisons" />
+    <rule ref="category/java/design.xml/ImmutableField" />
+    <rule ref="category/java/design.xml/SingularField" />
+
+    <!-- Threading -->
+    <rule ref="category/java/multithreading.xml/NonThreadSafeSingleton" />
+    <rule ref="category/java/multithreading.xml/DoubleCheckedLocking" />
+
+</ruleset>
