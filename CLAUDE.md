@@ -82,9 +82,7 @@ FanOutCoordinator → IntegrationAdapter[] (autowired set)
 
 ### Testing approach
 
-- Controller: `@WebMvcTest`
-- Service / Coordinator / Aggregator: plain JUnit with mocked collaborators
-- Adapters: contract tests against fixture data
+See [TESTING.md](TESTING.md).
 
 ### Quality gates
 

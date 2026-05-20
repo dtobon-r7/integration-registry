@@ -1,0 +1,3 @@
+# Test profile config. Empty by design — entries land here only when
+# tests need profile-driven config that diverges from local/staging/production.
+# Activate via @ActiveProfiles("test") on the test class.
