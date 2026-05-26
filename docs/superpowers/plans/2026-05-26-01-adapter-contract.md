@@ -4,7 +4,7 @@
 
 **Goal:** Land the `IntegrationAdapter` seam — the interface, the `FetchResult`, `NormalizedIntegration`, and `SourceIdentifier` records, the `IntegrationStatus` enum, and the three checked adapter exception types — as the migration-safety boundary RFC-001 names.
 
-**Architecture:** Single Java package `com.rapid7.integrationregistry.adapter`, types and shapes only, no behavior. Records use compact constructors with `Objects.requireNonNull(...)` guards keyed by package-private `FIELD_<NAME>` constants. The same constants are referenced by tests so a rename in the type cannot leave a stale-message assertion. No Spring annotations, no JSON annotations, no fixtures.
+**Architecture:** The seam sits under `com.rapid7.integrationregistry.adapter`, with the three checked exception classes grouped under a dedicated `.adapter.exception` sub-package. Types and shapes only, no behavior. Records use compact constructors with `Objects.requireNonNull(...)` guards keyed by package-private `FIELD_<NAME>` constants. The same constants are referenced by tests so a rename in the type cannot leave a stale-message assertion. No Spring annotations, no JSON annotations, no fixtures.
 
 **Tech Stack:** Java 25, Spring Boot 4.0.6, Maven (`./mvnw`), JUnit 5, AssertJ (`assertThat` — already on the test classpath via `spring-boot-starter-test`), ArchUnit + PMD as build gates.
 
@@ -39,9 +39,9 @@ All new code under `src/main/java/com/rapid7/integrationregistry/adapter/` and `
 | `adapter/SourceIdentifier.java` | Raw `(sourceType, sourceValue)` pair |
 | `adapter/NormalizedIntegration.java` | Nine-field normalized record |
 | `adapter/FetchResult.java` | List of integrations + fetch timestamp |
-| `adapter/AdapterTimeoutException.java` | Checked exception for timeouts |
-| `adapter/AdapterAuthException.java` | Checked exception for 4xx/auth |
-| `adapter/AdapterUpstreamException.java` | Checked exception for 5xx/transport |
+| `adapter/exception/AdapterTimeoutException.java` | Checked exception for timeouts |
+| `adapter/exception/AdapterAuthException.java` | Checked exception for 4xx/auth |
+| `adapter/exception/AdapterUpstreamException.java` | Checked exception for 5xx/transport |
 | `adapter/IntegrationAdapter.java` | The interface |
 
 Tests, one per main type that has runtime semantics (the interface itself has none, so no `IntegrationAdapterTest`):

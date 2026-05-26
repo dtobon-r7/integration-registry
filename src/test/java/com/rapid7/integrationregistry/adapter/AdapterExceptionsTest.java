@@ -48,22 +48,16 @@ class AdapterExceptionsTest {
     @Test
     void independentlyCatchable_shouldDistinguishEachType_whenThrownInSeparateBlocks() {
         // Arrange
-        // Each try block throws exactly one of the three types and catches Exception,
-        // then asserts the caught instance IS the expected type and is NOT either of
-        // the others. If a future refactor introduced a common parent above Exception
-        // (or made one type inherit from another), the negative isNotInstanceOf
-        // assertions would fail.
-        //
-        // Note: a multi-catch like `catch (AdapterAuthException | AdapterUpstreamException)`
-        // would not compile here, because checked exceptions in a multi-catch must be
-        // reachable from the try block — only one type is thrown per block.
+        // Each block throws one type and catches that exact type, then asserts the
+        // caught instance is NOT one of the other two. If a future refactor made one
+        // type inherit from another (or introduced a shared parent above Exception),
+        // the negative isNotInstanceOf assertions would fail.
 
         // Act + Assert — Timeout
         try {
             throw new AdapterTimeoutException("timeout");
-        } catch (Exception caught) {
+        } catch (AdapterTimeoutException caught) {
             assertThat(caught)
-                    .isInstanceOf(AdapterTimeoutException.class)
                     .isNotInstanceOf(AdapterAuthException.class)
                     .isNotInstanceOf(AdapterUpstreamException.class);
         }
@@ -71,9 +65,8 @@ class AdapterExceptionsTest {
         // Act + Assert — Auth
         try {
             throw new AdapterAuthException("auth");
-        } catch (Exception caught) {
+        } catch (AdapterAuthException caught) {
             assertThat(caught)
-                    .isInstanceOf(AdapterAuthException.class)
                     .isNotInstanceOf(AdapterTimeoutException.class)
                     .isNotInstanceOf(AdapterUpstreamException.class);
         }
@@ -81,9 +74,8 @@ class AdapterExceptionsTest {
         // Act + Assert — Upstream
         try {
             throw new AdapterUpstreamException("upstream");
-        } catch (Exception caught) {
+        } catch (AdapterUpstreamException caught) {
             assertThat(caught)
-                    .isInstanceOf(AdapterUpstreamException.class)
                     .isNotInstanceOf(AdapterTimeoutException.class)
                     .isNotInstanceOf(AdapterAuthException.class);
         }

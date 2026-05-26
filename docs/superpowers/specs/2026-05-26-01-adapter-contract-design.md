@@ -13,11 +13,11 @@ Land the `IntegrationAdapter` seam — the interface, the `FetchResult` and `Nor
 
 ## Architecture
 
-A single Java package `com.rapid7.integrationregistry.adapter` exposes the entire seam:
+The seam lives under `com.rapid7.integrationregistry.adapter`, with the checked failure modes grouped in a dedicated `.exception` sub-package:
 
 - One interface — `IntegrationAdapter`
 - Four value types — `FetchResult`, `NormalizedIntegration`, `SourceIdentifier`, `IntegrationStatus`
-- Three exception types — `AdapterTimeoutException`, `AdapterAuthException`, `AdapterUpstreamException`
+- Three exception types under `com.rapid7.integrationregistry.adapter.exception` — `AdapterTimeoutException`, `AdapterAuthException`, `AdapterUpstreamException`
 
 Nothing in this package depends on any other internal Registry layer; ArchUnit's `adapterLayer_shouldNotDependOnInternalLayers` rule already enforces this. The package depends only on the JDK and Spring's `org.springframework.http.HttpHeaders` (the `fetch` parameter, per RFC-001 §Adapter interface).
 
@@ -154,7 +154,7 @@ No methods, no precedence ordering on the enum. Worst-state-wins precedence (RFC
 
 ### Exceptions
 
-Three classes, each `extends Exception`, each with two constructors:
+Three classes under `com.rapid7.integrationregistry.adapter.exception`, each `extends Exception`, each with two constructors:
 
 ```java
 public class AdapterTimeoutException extends Exception {
