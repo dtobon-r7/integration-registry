@@ -1,0 +1,183 @@
+package com.rapid7.integrationregistry.mapping;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.networknt.schema.JsonSchema;
+import com.networknt.schema.JsonSchemaFactory;
+import com.networknt.schema.SpecVersion;
+import com.networknt.schema.ValidationMessage;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Set;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class BundleSchemaTest {
+
+    private static final String SCHEMA_CLASSPATH = "/vendor-mapping/schema/v1.json";
+    private static final String FIXTURES_ROOT = "/vendor-mapping/";
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    private static JsonSchema schema;
+
+    @BeforeAll
+    static void loadSchema() throws IOException {
+        try (InputStream in = BundleSchemaTest.class.getResourceAsStream(SCHEMA_CLASSPATH)) {
+            assertThat(in)
+                .as("schema resource %s present on classpath", SCHEMA_CLASSPATH)
+                .isNotNull();
+            JsonNode schemaNode = MAPPER.readTree(in);
+            JsonSchemaFactory factory = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012);
+            schema = factory.getSchema(schemaNode);
+        }
+    }
+
+    private Set<ValidationMessage> validateFixture(String fixtureFileName) throws IOException {
+        String classpathPath = FIXTURES_ROOT + fixtureFileName;
+        try (InputStream in = BundleSchemaTest.class.getResourceAsStream(classpathPath)) {
+            assertThat(in)
+                .as("fixture resource %s present on classpath", classpathPath)
+                .isNotNull();
+            JsonNode document = MAPPER.readTree(in);
+            return schema.validate(document);
+        }
+    }
+
+    // ---------- Positive cases ----------
+
+    @Test
+    void validate_shouldAccept_whenBundleIsMinimalValid() throws IOException {
+        Set<ValidationMessage> errors = validateFixture("valid-minimal.json");
+        assertThat(errors).isEmpty();
+    }
+
+    @Test
+    void validate_shouldAccept_whenServicesArrayIsEmpty() throws IOException {
+        Set<ValidationMessage> errors = validateFixture("valid-empty-services.json");
+        assertThat(errors).isEmpty();
+    }
+
+    @Test
+    void validate_shouldAccept_whenDataSourcesArrayIsEmpty() throws IOException {
+        Set<ValidationMessage> errors = validateFixture("valid-empty-data-sources.json");
+        assertThat(errors).isEmpty();
+    }
+
+    @Test
+    void validate_shouldAccept_whenServicesKeyOmitted() throws IOException {
+        Set<ValidationMessage> errors = validateFixture("valid-no-services-key.json");
+        assertThat(errors).isEmpty();
+    }
+
+    @Test
+    void validate_shouldAccept_whenSlugIsLiteralUnknown() throws IOException {
+        // The schema permits "unknown" as a slug because it matches ^[a-z0-9_-]+$.
+        // T11's CI suite is the enforcement boundary for the reservation — not the schema.
+        Set<ValidationMessage> errors = validateFixture("valid-unknown-slug.json");
+        assertThat(errors).isEmpty();
+    }
+
+    @Test
+    void validate_shouldAccept_whenMappingVersionHasPreReleaseSuffix() throws IOException {
+        Set<ValidationMessage> errors = validateFixture("valid-mapping-version-prerelease.json");
+        assertThat(errors).isEmpty();
+    }
+
+    // ---------- Negative cases ----------
+
+    @Test
+    void validate_shouldReject_whenApiVersionMissing() throws IOException {
+        Set<ValidationMessage> errors = validateFixture("invalid-missing-api-version.json");
+        assertThat(errors).isNotEmpty();
+        assertThat(errors).anyMatch(m -> m.getMessage().contains("apiVersion"));
+    }
+
+    @Test
+    void validate_shouldReject_whenApiVersionIsWrongValue() throws IOException {
+        Set<ValidationMessage> errors = validateFixture("invalid-wrong-api-version.json");
+        assertThat(errors).isNotEmpty();
+        assertThat(errors).anyMatch(m -> m.getInstanceLocation().toString().contains(".apiVersion"));
+    }
+
+    @Test
+    void validate_shouldReject_whenKindIsWrongValue() throws IOException {
+        Set<ValidationMessage> errors = validateFixture("invalid-wrong-kind.json");
+        assertThat(errors).isNotEmpty();
+        assertThat(errors).anyMatch(m -> m.getInstanceLocation().toString().contains(".kind"));
+    }
+
+    @Test
+    void validate_shouldReject_whenMappingVersionMissing() throws IOException {
+        Set<ValidationMessage> errors = validateFixture("invalid-missing-mapping-version.json");
+        assertThat(errors).isNotEmpty();
+        assertThat(errors).anyMatch(m -> m.getMessage().contains("mapping_version"));
+    }
+
+    @Test
+    void validate_shouldReject_whenMappingVersionIsNotSemver() throws IOException {
+        Set<ValidationMessage> errors = validateFixture("invalid-mapping-version-bad-format.json");
+        assertThat(errors).isNotEmpty();
+        assertThat(errors).anyMatch(m -> m.getInstanceLocation().toString().contains(".metadata.mapping_version"));
+    }
+
+    @Test
+    void validate_shouldReject_whenVendorSlugFailsRegex() throws IOException {
+        Set<ValidationMessage> errors = validateFixture("invalid-vendor-slug-uppercase.json");
+        assertThat(errors).isNotEmpty();
+        assertThat(errors).anyMatch(m -> m.getInstanceLocation().toString().contains(".spec.vendors[0].id"));
+    }
+
+    @Test
+    void validate_shouldReject_whenServiceSlugFailsRegex() throws IOException {
+        Set<ValidationMessage> errors = validateFixture("invalid-service-slug-uppercase.json");
+        assertThat(errors).isNotEmpty();
+        assertThat(errors).anyMatch(m -> m.getInstanceLocation().toString().contains(".services[0].id"));
+    }
+
+    @Test
+    void validate_shouldReject_whenCategoryNotInEnum() throws IOException {
+        Set<ValidationMessage> errors = validateFixture("invalid-unknown-category.json");
+        assertThat(errors).isNotEmpty();
+        assertThat(errors).anyMatch(m -> m.getInstanceLocation().toString().contains(".category"));
+    }
+
+    @Test
+    void validate_shouldReject_whenProductNotInEnum() throws IOException {
+        Set<ValidationMessage> errors = validateFixture("invalid-unknown-product.json");
+        assertThat(errors).isNotEmpty();
+        assertThat(errors).anyMatch(m -> m.getInstanceLocation().toString().contains(".product"));
+    }
+
+    @Test
+    void validate_shouldReject_whenSourceTypeNotInEnum() throws IOException {
+        Set<ValidationMessage> errors = validateFixture("invalid-unknown-source-type.json");
+        assertThat(errors).isNotEmpty();
+        assertThat(errors).anyMatch(m -> m.getInstanceLocation().toString().contains(".source_type"));
+    }
+
+    @Test
+    void validate_shouldReject_whenSourceValueContainsPipe() throws IOException {
+        Set<ValidationMessage> errors = validateFixture("invalid-source-value-with-pipe.json");
+        assertThat(errors).isNotEmpty();
+        assertThat(errors).anyMatch(m -> m.getInstanceLocation().toString().contains(".source_value"));
+    }
+
+    @Test
+    void validate_shouldReject_whenUnknownPropertyOnVendor() throws IOException {
+        // Proves additionalProperties: false is in effect — typos like `data_soruces`
+        // or fabricated fields like `deprecated_at` fail validation.
+        Set<ValidationMessage> errors = validateFixture("invalid-unknown-property.json");
+        assertThat(errors).isNotEmpty();
+        assertThat(errors).anyMatch(m -> m.getMessage().contains("deprecated_at"));
+    }
+
+    @Test
+    void validate_shouldReject_whenSourceValueIsEmpty() throws IOException {
+        Set<ValidationMessage> errors = validateFixture("invalid-source-value-empty.json");
+        assertThat(errors).isNotEmpty();
+        assertThat(errors).anyMatch(m -> m.getInstanceLocation().toString().contains(".source_value"));
+    }
+}

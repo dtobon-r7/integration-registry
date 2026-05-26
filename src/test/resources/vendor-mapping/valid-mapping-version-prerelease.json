@@ -1,0 +1,10 @@
+{
+  "apiVersion": "registry.rapid7.com/v1",
+  "kind": "VendorMapping",
+  "metadata": { "mapping_version": "v1.0.0-rc1" },
+  "spec": {
+    "vendors": [
+      { "id": "microsoft", "name": "Microsoft", "services": [] }
+    ]
+  }
+}
