@@ -2,89 +2,44 @@ package com.rapid7.integrationregistry.adapter;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.function.BiFunction;
+import java.util.function.Function;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 class AdapterExceptionsTest {
 
     @Test
     void messageCtor_shouldRoundTripMessage_whenAdapterTimeoutExceptionThrown() {
-        // Arrange
-        String message = "ICON read timeout after 5s";
-
-        // Act
-        AdapterTimeoutException thrown = new AdapterTimeoutException(message);
-
-        // Assert
-        assertThat(thrown.getMessage()).isEqualTo(message);
-        assertThat(thrown.getCause()).isNull();
+        assertMessageRoundTrip(AdapterTimeoutException::new, "ICON read timeout after 5s");
     }
 
     @Test
     void messageCtor_shouldRoundTripMessage_whenAdapterAuthExceptionThrown() {
-        // Arrange
-        String message = "401 from ICON";
-
-        // Act
-        AdapterAuthException thrown = new AdapterAuthException(message);
-
-        // Assert
-        assertThat(thrown.getMessage()).isEqualTo(message);
-        assertThat(thrown.getCause()).isNull();
+        assertMessageRoundTrip(AdapterAuthException::new, "401 from ICON");
     }
 
     @Test
     void messageCtor_shouldRoundTripMessage_whenAdapterUpstreamExceptionThrown() {
-        // Arrange
-        String message = "ICON 503";
-
-        // Act
-        AdapterUpstreamException thrown = new AdapterUpstreamException(message);
-
-        // Assert
-        assertThat(thrown.getMessage()).isEqualTo(message);
-        assertThat(thrown.getCause()).isNull();
+        assertMessageRoundTrip(AdapterUpstreamException::new, "ICON 503");
     }
 
     @Test
     void messageCauseCtor_shouldRoundTripBoth_whenAdapterTimeoutExceptionThrown() {
-        // Arrange
-        String message = "ICON read timeout";
-        Throwable cause = new RuntimeException("socket read deadline");
-
-        // Act
-        AdapterTimeoutException thrown = new AdapterTimeoutException(message, cause);
-
-        // Assert
-        assertThat(thrown.getMessage()).isEqualTo(message);
-        assertThat(thrown.getCause()).isSameAs(cause);
+        assertMessageAndCauseRoundTrip(
+            AdapterTimeoutException::new, "ICON read timeout", new RuntimeException("socket read deadline"));
     }
 
     @Test
     void messageCauseCtor_shouldRoundTripBoth_whenAdapterAuthExceptionThrown() {
-        // Arrange
-        String message = "401 from ICON";
-        Throwable cause = new RuntimeException("WebClientResponseException 401");
-
-        // Act
-        AdapterAuthException thrown = new AdapterAuthException(message, cause);
-
-        // Assert
-        assertThat(thrown.getMessage()).isEqualTo(message);
-        assertThat(thrown.getCause()).isSameAs(cause);
+        assertMessageAndCauseRoundTrip(
+            AdapterAuthException::new, "401 from ICON", new RuntimeException("WebClientResponseException 401"));
     }
 
     @Test
     void messageCauseCtor_shouldRoundTripBoth_whenAdapterUpstreamExceptionThrown() {
-        // Arrange
-        String message = "ICON 503";
-        Throwable cause = new RuntimeException("WebClientResponseException 503");
-
-        // Act
-        AdapterUpstreamException thrown = new AdapterUpstreamException(message, cause);
-
-        // Assert
-        assertThat(thrown.getMessage()).isEqualTo(message);
-        assertThat(thrown.getCause()).isSameAs(cause);
+        assertMessageAndCauseRoundTrip(
+            AdapterUpstreamException::new, "ICON 503", new RuntimeException("WebClientResponseException 503"));
     }
 
     @Test
@@ -129,5 +84,18 @@ class AdapterExceptionsTest {
                     .isNotInstanceOf(AdapterTimeoutException.class)
                     .isNotInstanceOf(AdapterAuthException.class);
         }
+    }
+
+    private static void assertMessageRoundTrip(Function<String, ? extends Exception> ctor, String message) {
+        Exception thrown = ctor.apply(message);
+        assertThat(thrown.getMessage()).isEqualTo(message);
+        assertThat(thrown.getCause()).isNull();
+    }
+
+    private static void assertMessageAndCauseRoundTrip(
+        BiFunction<String, Throwable, ? extends Exception> ctor, String message, Throwable cause) {
+        Exception thrown = ctor.apply(message, cause);
+        assertThat(thrown.getMessage()).isEqualTo(message);
+        assertThat(thrown.getCause()).isSameAs(cause);
     }
 }

@@ -8,9 +8,6 @@ class IntegrationStatusTest {
 
     @Test
     void values_shouldContainExactlyFiveStates_whenInspected() {
-        // Arrange
-        // (no setup — IntegrationStatus.values() is a class-level invariant)
-
         // Act
         IntegrationStatus[] all = IntegrationStatus.values();
 

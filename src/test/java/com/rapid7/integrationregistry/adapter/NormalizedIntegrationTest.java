@@ -1,5 +1,6 @@
 package com.rapid7.integrationregistry.adapter;
 
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -23,16 +24,13 @@ class NormalizedIntegrationTest {
 
     @Test
     void constructor_shouldBuildRecord_whenAllFieldsProvided() {
-        // Arrange
-        // (constants above)
-
         // Act
         NormalizedIntegration record = new NormalizedIntegration(
             INTEGRATION_ID,
             SOURCE_IDENTIFIER,
             PRODUCT_NAME,
             INTEGRATION_TYPE,
-            "my-jira",            // integrationLabel populated this time
+            "my-jira",
             STATUS,
             LAST_SUCCESS,
             CONFIGURATION_URL,
@@ -53,78 +51,64 @@ class NormalizedIntegrationTest {
 
     @Test
     void constructor_shouldThrowNPE_whenIntegrationIdNull() {
-        assertThatNullPointerException()
-            .isThrownBy(() -> new NormalizedIntegration(
-                null, SOURCE_IDENTIFIER, PRODUCT_NAME, INTEGRATION_TYPE,
-                INTEGRATION_LABEL, STATUS, LAST_SUCCESS, CONFIGURATION_URL,
-                CUSTOMER_ACCOUNT_ID))
-            .withMessage(NormalizedIntegration.FIELD_INTEGRATION_ID);
+        assertNpeFromCtor(
+            () -> new NormalizedIntegration(null, SOURCE_IDENTIFIER, PRODUCT_NAME, INTEGRATION_TYPE,
+                INTEGRATION_LABEL, STATUS, LAST_SUCCESS, CONFIGURATION_URL, CUSTOMER_ACCOUNT_ID),
+            NormalizedIntegration.FIELD_INTEGRATION_ID);
     }
 
     @Test
     void constructor_shouldThrowNPE_whenSourceIdentifierNull() {
-        assertThatNullPointerException()
-            .isThrownBy(() -> new NormalizedIntegration(
-                INTEGRATION_ID, null, PRODUCT_NAME, INTEGRATION_TYPE,
-                INTEGRATION_LABEL, STATUS, LAST_SUCCESS, CONFIGURATION_URL,
-                CUSTOMER_ACCOUNT_ID))
-            .withMessage(NormalizedIntegration.FIELD_SOURCE_IDENTIFIER);
+        assertNpeFromCtor(
+            () -> new NormalizedIntegration(INTEGRATION_ID, null, PRODUCT_NAME, INTEGRATION_TYPE,
+                INTEGRATION_LABEL, STATUS, LAST_SUCCESS, CONFIGURATION_URL, CUSTOMER_ACCOUNT_ID),
+            NormalizedIntegration.FIELD_SOURCE_IDENTIFIER);
     }
 
     @Test
     void constructor_shouldThrowNPE_whenProductNameNull() {
-        assertThatNullPointerException()
-            .isThrownBy(() -> new NormalizedIntegration(
-                INTEGRATION_ID, SOURCE_IDENTIFIER, null, INTEGRATION_TYPE,
-                INTEGRATION_LABEL, STATUS, LAST_SUCCESS, CONFIGURATION_URL,
-                CUSTOMER_ACCOUNT_ID))
-            .withMessage(NormalizedIntegration.FIELD_PRODUCT_NAME);
+        assertNpeFromCtor(
+            () -> new NormalizedIntegration(INTEGRATION_ID, SOURCE_IDENTIFIER, null, INTEGRATION_TYPE,
+                INTEGRATION_LABEL, STATUS, LAST_SUCCESS, CONFIGURATION_URL, CUSTOMER_ACCOUNT_ID),
+            NormalizedIntegration.FIELD_PRODUCT_NAME);
     }
 
     @Test
     void constructor_shouldThrowNPE_whenIntegrationTypeNull() {
-        assertThatNullPointerException()
-            .isThrownBy(() -> new NormalizedIntegration(
-                INTEGRATION_ID, SOURCE_IDENTIFIER, PRODUCT_NAME, null,
-                INTEGRATION_LABEL, STATUS, LAST_SUCCESS, CONFIGURATION_URL,
-                CUSTOMER_ACCOUNT_ID))
-            .withMessage(NormalizedIntegration.FIELD_INTEGRATION_TYPE);
+        assertNpeFromCtor(
+            () -> new NormalizedIntegration(INTEGRATION_ID, SOURCE_IDENTIFIER, PRODUCT_NAME, null,
+                INTEGRATION_LABEL, STATUS, LAST_SUCCESS, CONFIGURATION_URL, CUSTOMER_ACCOUNT_ID),
+            NormalizedIntegration.FIELD_INTEGRATION_TYPE);
     }
 
     @Test
     void constructor_shouldThrowNPE_whenStatusNull() {
-        assertThatNullPointerException()
-            .isThrownBy(() -> new NormalizedIntegration(
-                INTEGRATION_ID, SOURCE_IDENTIFIER, PRODUCT_NAME, INTEGRATION_TYPE,
-                INTEGRATION_LABEL, null, LAST_SUCCESS, CONFIGURATION_URL,
-                CUSTOMER_ACCOUNT_ID))
-            .withMessage(NormalizedIntegration.FIELD_STATUS);
+        assertNpeFromCtor(
+            () -> new NormalizedIntegration(INTEGRATION_ID, SOURCE_IDENTIFIER, PRODUCT_NAME, INTEGRATION_TYPE,
+                INTEGRATION_LABEL, null, LAST_SUCCESS, CONFIGURATION_URL, CUSTOMER_ACCOUNT_ID),
+            NormalizedIntegration.FIELD_STATUS);
     }
 
     @Test
     void constructor_shouldThrowNPE_whenConfigurationUrlNull() {
-        assertThatNullPointerException()
-            .isThrownBy(() -> new NormalizedIntegration(
-                INTEGRATION_ID, SOURCE_IDENTIFIER, PRODUCT_NAME, INTEGRATION_TYPE,
-                INTEGRATION_LABEL, STATUS, LAST_SUCCESS, null,
-                CUSTOMER_ACCOUNT_ID))
-            .withMessage(NormalizedIntegration.FIELD_CONFIGURATION_URL);
+        assertNpeFromCtor(
+            () -> new NormalizedIntegration(INTEGRATION_ID, SOURCE_IDENTIFIER, PRODUCT_NAME, INTEGRATION_TYPE,
+                INTEGRATION_LABEL, STATUS, LAST_SUCCESS, null, CUSTOMER_ACCOUNT_ID),
+            NormalizedIntegration.FIELD_CONFIGURATION_URL);
     }
 
     @Test
     void constructor_shouldThrowNPE_whenCustomerAccountIdNull() {
-        assertThatNullPointerException()
-            .isThrownBy(() -> new NormalizedIntegration(
-                INTEGRATION_ID, SOURCE_IDENTIFIER, PRODUCT_NAME, INTEGRATION_TYPE,
-                INTEGRATION_LABEL, STATUS, LAST_SUCCESS, CONFIGURATION_URL,
-                null))
-            .withMessage(NormalizedIntegration.FIELD_CUSTOMER_ACCOUNT_ID);
+        assertNpeFromCtor(
+            () -> new NormalizedIntegration(INTEGRATION_ID, SOURCE_IDENTIFIER, PRODUCT_NAME, INTEGRATION_TYPE,
+                INTEGRATION_LABEL, STATUS, LAST_SUCCESS, CONFIGURATION_URL, null),
+            NormalizedIntegration.FIELD_CUSTOMER_ACCOUNT_ID);
     }
 
     @Test
     void constructor_shouldAcceptNullIntegrationLabel_whenSourceProductHasNoPerInstanceName() {
         // Arrange
-        // (RFC: ICON has no per-instance customer-given name, so integrationLabel is null)
+        // RFC-001: integrationLabel is nullable when the source product has no per-instance label
 
         // Act
         NormalizedIntegration record = new NormalizedIntegration(
@@ -138,7 +122,7 @@ class NormalizedIntegrationTest {
     @Test
     void constructor_shouldAcceptNullLastSuccessTimestamp_whenNoSuccessfulActivityRecorded() {
         // Arrange
-        // (RFC: null when no successful activity recorded)
+        // RFC-001: null when no successful activity recorded
 
         // Act
         NormalizedIntegration record = new NormalizedIntegration(
@@ -147,5 +131,9 @@ class NormalizedIntegrationTest {
 
         // Assert
         assertThat(record.lastSuccessTimestamp()).isNull();
+    }
+
+    private static void assertNpeFromCtor(ThrowingCallable ctor, String expectedField) {
+        assertThatNullPointerException().isThrownBy(ctor).withMessage(expectedField);
     }
 }
