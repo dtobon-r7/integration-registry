@@ -1,4 +1,4 @@
-package com.rapid7.integrationregistry.adapter;
+package com.rapid7.integrationregistry.adapter.exception;
 
 /**
  * Thrown when the adapter's own timeout fires (the upstream did not respond in time).

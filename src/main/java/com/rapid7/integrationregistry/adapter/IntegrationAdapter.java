@@ -1,5 +1,8 @@
 package com.rapid7.integrationregistry.adapter;
 
+import com.rapid7.integrationregistry.adapter.exception.AdapterAuthException;
+import com.rapid7.integrationregistry.adapter.exception.AdapterTimeoutException;
+import com.rapid7.integrationregistry.adapter.exception.AdapterUpstreamException;
 import org.springframework.http.HttpHeaders;
 
 /**

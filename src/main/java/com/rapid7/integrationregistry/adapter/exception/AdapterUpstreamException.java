@@ -1,4 +1,4 @@
-package com.rapid7.integrationregistry.adapter;
+package com.rapid7.integrationregistry.adapter.exception;
 
 /**
  * Thrown when the upstream returns a 5xx error or the adapter classifies a transport error
