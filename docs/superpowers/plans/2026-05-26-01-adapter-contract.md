@@ -257,7 +257,6 @@ package com.rapid7.integrationregistry.adapter;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
 
 class AdapterExceptionsTest {
 
@@ -345,35 +344,44 @@ class AdapterExceptionsTest {
     @Test
     void independentlyCatchable_shouldDistinguishEachType_whenThrownInSeparateBlocks() {
         // Arrange
-        // Each try/catch block catches exactly one of the three types. If a future
-        // refactor introduced a common parent above Exception, the wrong block would
-        // catch and this test would fail.
+        // Each try block throws exactly one of the three types and catches Exception,
+        // then asserts the caught instance IS the expected type and is NOT either of
+        // the others. If a future refactor introduced a common parent above Exception
+        // (or made one type inherit from another), the negative isNotInstanceOf
+        // assertions would fail.
+        //
+        // Note: a multi-catch like `catch (AdapterAuthException | AdapterUpstreamException)`
+        // would not compile here, because checked exceptions in a multi-catch must be
+        // reachable from the try block — only one type is thrown per block.
 
         // Act + Assert — Timeout
         try {
             throw new AdapterTimeoutException("timeout");
-        } catch (AdapterAuthException | AdapterUpstreamException unexpected) {
-            fail("AdapterTimeoutException leaked into a non-timeout catch", unexpected);
-        } catch (AdapterTimeoutException expected) {
-            assertThat(expected).isInstanceOf(AdapterTimeoutException.class);
+        } catch (Exception caught) {
+            assertThat(caught)
+                    .isInstanceOf(AdapterTimeoutException.class)
+                    .isNotInstanceOf(AdapterAuthException.class)
+                    .isNotInstanceOf(AdapterUpstreamException.class);
         }
 
         // Act + Assert — Auth
         try {
             throw new AdapterAuthException("auth");
-        } catch (AdapterTimeoutException | AdapterUpstreamException unexpected) {
-            fail("AdapterAuthException leaked into a non-auth catch", unexpected);
-        } catch (AdapterAuthException expected) {
-            assertThat(expected).isInstanceOf(AdapterAuthException.class);
+        } catch (Exception caught) {
+            assertThat(caught)
+                    .isInstanceOf(AdapterAuthException.class)
+                    .isNotInstanceOf(AdapterTimeoutException.class)
+                    .isNotInstanceOf(AdapterUpstreamException.class);
         }
 
         // Act + Assert — Upstream
         try {
             throw new AdapterUpstreamException("upstream");
-        } catch (AdapterTimeoutException | AdapterAuthException unexpected) {
-            fail("AdapterUpstreamException leaked into a non-upstream catch", unexpected);
-        } catch (AdapterUpstreamException expected) {
-            assertThat(expected).isInstanceOf(AdapterUpstreamException.class);
+        } catch (Exception caught) {
+            assertThat(caught)
+                    .isInstanceOf(AdapterUpstreamException.class)
+                    .isNotInstanceOf(AdapterTimeoutException.class)
+                    .isNotInstanceOf(AdapterAuthException.class);
         }
     }
 }
