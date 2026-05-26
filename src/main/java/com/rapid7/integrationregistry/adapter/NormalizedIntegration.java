@@ -3,6 +3,20 @@ package com.rapid7.integrationregistry.adapter;
 import java.time.Instant;
 import java.util.Objects;
 
+/**
+ * Adapter-shaped record describing a single third-party integration as observed by a
+ * Rapid7 product. Produced by {@link IntegrationAdapter#fetch} implementations and
+ * consumed by the future aggregator and response-assembly layers.
+ *
+ * <p>{@code productName} must equal the value returned by the producing adapter's
+ * {@link IntegrationAdapter#productName()}; downstream resolution against the vendor
+ * mapping snapshot keys on this pair.
+ *
+ * <p>{@code customerAccountId} MUST equal the {@code orgId} argument passed to
+ * {@link IntegrationAdapter#fetch}; the coordinator and cache key on this value, so
+ * any divergence will split-brain entries. Populated internally; never surfaced on
+ * API responses (RFC-001 §Normalized integration record).
+ */
 public record NormalizedIntegration(
     String integrationId,
     SourceIdentifier sourceIdentifier,
