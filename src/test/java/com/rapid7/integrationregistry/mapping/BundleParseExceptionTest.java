@@ -48,10 +48,6 @@ class BundleParseExceptionTest {
 
         // Act
         BundleParseException ex = BundleParseException.schemaInvalid(mutable);
-        // After construction, mutating `mutable` must not affect the exception.
-        // We can't easily add a real ValidationMessage here without a JSON Schema
-        // round trip, but adding null is rejected by Set.copyOf, which is the
-        // mechanism that proves the defensive copy ran.
 
         // Assert
         assertThat(ex.validationMessages()).isNotSameAs(mutable);

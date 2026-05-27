@@ -116,12 +116,14 @@ class BundleParserTest {
         // Arrange — proves the stream type contract is satisfied with any InputStream,
         // not just classpath InputStreams.
         BundleParser parser = new BundleParser();
-        byte[] yaml = ("apiVersion: registry.rapid7.com/v1\n"
-            + "kind: VendorMapping\n"
-            + "metadata:\n"
-            + "  mapping_version: v9.9.9\n"
-            + "spec:\n"
-            + "  vendors: []\n").getBytes(StandardCharsets.UTF_8);
+        byte[] yaml = """
+            apiVersion: registry.rapid7.com/v1
+            kind: VendorMapping
+            metadata:
+              mapping_version: v9.9.9
+            spec:
+              vendors: []
+            """.getBytes(StandardCharsets.UTF_8);
 
         // Act
         VendorMappingSnapshot snapshot = parser.parse(new ByteArrayInputStream(yaml));

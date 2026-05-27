@@ -105,10 +105,8 @@ public final class BundleParser {
         try {
             return yamlMapper.readTree(yamlStream);
         } catch (IOException ex) {
-            // Jackson throws JacksonException (a subclass of IOException) for
-            // YAML syntax failures and IOException for upstream stream failures.
-            // Both wrap into the same parse-failure shape; the original cause
-            // (preserved via getCause()) carries the discriminating runtime type.
+            // Single catch (not split JacksonException/IOException) — PMD
+            // IdenticalCatchBranches. Cause carries the discriminating type.
             throw BundleParseException.yamlSyntaxError(ex);
         }
     }

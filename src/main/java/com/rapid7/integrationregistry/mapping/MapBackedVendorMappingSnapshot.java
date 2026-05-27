@@ -39,9 +39,8 @@ final class MapBackedVendorMappingSnapshot implements VendorMappingSnapshot {
 
     @Override
     public VendorResolution lookup(ProductName productName, SourceType sourceType, String sourceValue) {
-        Objects.requireNonNull(productName, FIELD_PRODUCT_NAME);
-        Objects.requireNonNull(sourceType, FIELD_SOURCE_TYPE);
-        Objects.requireNonNull(sourceValue, FIELD_SOURCE_VALUE);
+        // Null validation lives in TripletKey's compact constructor (same FIELD_*
+        // messages); duplicating the guards here would just deepen the stack frame.
         return index.getOrDefault(
             new TripletKey(productName, sourceType, sourceValue),
             VendorResolution.unknown());
