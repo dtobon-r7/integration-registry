@@ -1,49 +1,26 @@
 package com.rapid7.integrationregistry.mapping;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.networknt.schema.JsonSchema;
-import com.networknt.schema.JsonSchemaFactory;
-import com.networknt.schema.SpecVersion;
 import com.networknt.schema.ValidationMessage;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class BundleSchemaTest {
 
-    private static final String SCHEMA_CLASSPATH = "/vendor-mapping/schema/v1.json";
-    private static final String FIXTURES_ROOT = "/vendor-mapping/";
-    private static final ObjectMapper MAPPER = new ObjectMapper();
-
     private static JsonSchema schema;
 
     @BeforeAll
     static void loadSchema() throws IOException {
-        try (InputStream in = BundleSchemaTest.class.getResourceAsStream(SCHEMA_CLASSPATH)) {
-            assertThat(in)
-                .as("schema resource %s present on classpath", SCHEMA_CLASSPATH)
-                .isNotNull();
-            JsonNode schemaNode = MAPPER.readTree(in);
-            JsonSchemaFactory factory = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012);
-            schema = factory.getSchema(schemaNode);
-        }
+        schema = VendorMappingSchemaFixture.loadSchema();
     }
 
     private Set<ValidationMessage> validateFixture(String fixtureFileName) throws IOException {
-        String classpathPath = FIXTURES_ROOT + fixtureFileName;
-        try (InputStream in = BundleSchemaTest.class.getResourceAsStream(classpathPath)) {
-            assertThat(in)
-                .as("fixture resource %s present on classpath", classpathPath)
-                .isNotNull();
-            JsonNode document = MAPPER.readTree(in);
-            return schema.validate(document);
-        }
+        return schema.validate(VendorMappingSchemaFixture.readFixture(fixtureFileName));
     }
 
     // ---------- Positive cases ----------
@@ -75,7 +52,7 @@ class BundleSchemaTest {
     @Test
     void validate_shouldAccept_whenSlugIsLiteralUnknown() throws IOException {
         // The schema permits "unknown" as a slug because it matches ^[a-z0-9_-]+$.
-        // T11's CI suite is the enforcement boundary for the reservation — not the schema.
+        // The bundle CI suite is the enforcement boundary for the reservation — not the schema.
         Set<ValidationMessage> errors = validateFixture("valid-unknown-slug.json");
         assertThat(errors).isEmpty();
     }
