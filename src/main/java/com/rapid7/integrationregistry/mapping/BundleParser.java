@@ -19,15 +19,16 @@ import java.util.Set;
 
 /**
  * Parses a vendor-mapping bundle YAML document into an immutable
- * {@link VendorMappingSnapshot}. Stateless and framework-agnostic;
- * Plan 03 wires this into Spring with the S3 fetch and readiness gate.
+ * {@link VendorMappingSnapshot}. Stateless and framework-agnostic; the
+ * runtime loader (Spring-wired in a downstream layer) supplies the input
+ * stream and handles S3 fetch, disk caching, and the readiness gate.
  *
  * <h2>Threading</h2>
  *
  * <p>This parser holds two final fields configured in the constructor and is
- * intended for single-threaded use on the boot / refresh path that Plan 03
- * owns. {@link com.fasterxml.jackson.databind.ObjectMapper} is documented
- * thread-safe once configured (which is the case here), but
+ * intended for single-threaded use on the boot / refresh path that the
+ * runtime loader owns. {@link com.fasterxml.jackson.databind.ObjectMapper}
+ * is documented thread-safe once configured (which is the case here), but
  * {@link com.networknt.schema.JsonSchema#validate(com.fasterxml.jackson.databind.JsonNode)}
  * does not carry an explicit thread-safety guarantee in the
  * {@code com.networknt:json-schema-validator} 1.5.4 release notes. Callers
@@ -42,9 +43,10 @@ import java.util.Set;
  * by RFC-001 §Vendor mapping) is small by design — vendor / vendor-service /
  * data-source counts are bounded by the curated catalog, not by user input —
  * so the parser does not impose explicit size, depth, or alias caps. The
- * trust boundary is owned by Plan 03's S3 fetch (the bundle is curated in-
- * repo and shipped via a CI publish pipeline; the loader is responsible for
- * any threat-model hardening such as SnakeYAML {@code LoaderOptions} caps).
+ * trust boundary is owned by the runtime loader's S3 fetch (the bundle is
+ * curated in-repo and shipped via a CI publish pipeline; the loader is
+ * responsible for any threat-model hardening such as SnakeYAML
+ * {@code LoaderOptions} caps).
  */
 public final class BundleParser {
 
@@ -74,9 +76,9 @@ public final class BundleParser {
      *   <li><b>Schema/enum-sync drift</b> — propagates as
      *       {@link IllegalStateException} (unchecked) when a schema-validated
      *       wire form does not map through {@code fromWireForm()}. This is a
-     *       build-time invariant violation that the {@code EnumSchemaSyncTest}
-     *       in Plan 01 is the first line of defense against; it is NOT caught
-     *       by {@code BundleParseException}. Callers that need to handle every
+     *       build-time invariant violation that {@code EnumSchemaSyncTest} is
+     *       the first line of defense against; it is NOT caught by
+     *       {@code BundleParseException}. Callers that need to handle every
      *       parse failure (e.g. the readiness-gate loader) must catch it
      *       explicitly.</li>
      *   <li><b>Packaging defects</b> — propagate as

@@ -21,7 +21,7 @@ import java.util.stream.Collectors;
  * accessible via the dedicated accessor, while the human-readable summary is
  * available via {@link #getMessage()}. Contrast with the <em>marker-style</em>
  * adapter exceptions in {@code com.rapid7.integrationregistry.adapter.exception}
- * which carry only message and cause. See ADR-0001 for the convention.
+ * which carry only message and cause. See ADR-001 for the convention.
  */
 public class BundleParseException extends Exception {
 
