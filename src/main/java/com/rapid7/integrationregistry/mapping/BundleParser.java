@@ -7,6 +7,7 @@ import com.networknt.schema.JsonSchema;
 import com.networknt.schema.JsonSchemaFactory;
 import com.networknt.schema.SpecVersion;
 import com.networknt.schema.ValidationMessage;
+import com.rapid7.integrationregistry.mapping.exception.BundleParseException;
 
 import java.io.IOException;
 import java.io.InputStream;

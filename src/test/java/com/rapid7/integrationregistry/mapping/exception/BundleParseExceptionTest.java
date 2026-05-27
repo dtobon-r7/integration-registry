@@ -1,4 +1,4 @@
-package com.rapid7.integrationregistry.mapping;
+package com.rapid7.integrationregistry.mapping.exception;
 
 import com.networknt.schema.ValidationMessage;
 import com.rapid7.integrationregistry.adapter.exception.AdapterAuthException;
@@ -72,7 +72,7 @@ class BundleParseExceptionTest {
         // If a future refactor introduces a shared parent above Exception
         // (e.g., a "RegistryException" abstract class) for either family,
         // these isNotInstanceOf assertions will fail. The two exception
-        // families (mapping.BundleParseException and adapter.exception.*)
+        // families (mapping.exception.BundleParseException and adapter.exception.*)
         // are deliberately independent — see ADR-0001.
 
         // Act / Assert

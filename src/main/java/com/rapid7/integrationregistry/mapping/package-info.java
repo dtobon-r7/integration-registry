@@ -2,20 +2,21 @@
  * Vendor-mapping read-side contract and stateless data layer:
  *
  * <ul>
- *   <li>{@link com.rapid7.integrationregistry.mapping.VendorMappingSnapshot} interface
- *       (Plan 01) — the read-side contract.</li>
- *   <li>{@link com.rapid7.integrationregistry.mapping.VendorResolution} record (Plan 01)
+ *   <li>{@link com.rapid7.integrationregistry.mapping.VendorMappingSnapshot} interface —
+ *       the read-side contract.</li>
+ *   <li>{@link com.rapid7.integrationregistry.mapping.VendorResolution} record
  *       carrying resolved vendor / vendor-service identity.</li>
  *   <li>The closed enums
  *       ({@link com.rapid7.integrationregistry.mapping.VendorCategory},
  *       {@link com.rapid7.integrationregistry.mapping.SourceType},
  *       {@link com.rapid7.integrationregistry.mapping.ProductName}) referenced by
- *       the bundle JSON Schema and the snapshot lookup API (Plan 01).</li>
- *   <li>{@link com.rapid7.integrationregistry.mapping.BundleParser} (Plan 02) —
+ *       the bundle JSON Schema and the snapshot lookup API.</li>
+ *   <li>{@link com.rapid7.integrationregistry.mapping.BundleParser} —
  *       parses bundle YAML, validates against the schema, and constructs the
  *       immutable snapshot.</li>
- *   <li>{@link com.rapid7.integrationregistry.mapping.BundleParseException} (Plan 02) —
- *       checked exception covering YAML syntax and schema-validation failures.</li>
+ *   <li>{@link com.rapid7.integrationregistry.mapping.exception.BundleParseException} —
+ *       checked exception covering YAML syntax and schema-validation failures
+ *       (lives in the {@code exception/} sub-package per ADR-001).</li>
  * </ul>
  *
  * <p>The map-backed snapshot implementation is package-private; callers depend

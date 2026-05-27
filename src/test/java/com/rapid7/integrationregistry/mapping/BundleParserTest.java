@@ -2,6 +2,7 @@ package com.rapid7.integrationregistry.mapping;
 
 import com.fasterxml.jackson.core.JacksonException;
 import com.networknt.schema.ValidationMessage;
+import com.rapid7.integrationregistry.mapping.exception.BundleParseException;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;

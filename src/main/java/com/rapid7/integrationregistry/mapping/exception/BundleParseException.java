@@ -1,4 +1,4 @@
-package com.rapid7.integrationregistry.mapping;
+package com.rapid7.integrationregistry.mapping.exception;
 
 import com.networknt.schema.ValidationMessage;
 
