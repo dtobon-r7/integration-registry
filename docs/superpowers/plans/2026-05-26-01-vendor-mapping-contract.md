@@ -58,7 +58,7 @@ Tests, one per main type that has runtime semantics (the interface itself has no
 | `mapping/SourceTypeTest.java` | 4 values, wire-form correctness, round-trip, unknown-input |
 | `mapping/ProductNameTest.java` | 6 values, wire-form correctness (incl. two-word `"Surface Command"`), round-trip, unknown-input |
 | `mapping/VendorResolutionTest.java` | Happy path + 5 null rejections + unknown() returns synthetic triplet + same-instance |
-| `mapping/BundleSchemaTest.java` | 6 positive + 13 negative schema-validation contract tests against fixtures |
+| `mapping/BundleSchemaTest.java` | 6 positive + 15 negative schema-validation contract tests against fixtures |
 
 JSON fixtures (created in Task 6):
 
@@ -75,6 +75,8 @@ JSON fixtures (created in Task 6):
 | `resources/vendor-mapping/invalid-wrong-kind.json` | `kind: "VendorMappingV2"` |
 | `resources/vendor-mapping/invalid-missing-mapping-version.json` | Negative case |
 | `resources/vendor-mapping/invalid-mapping-version-bad-format.json` | `mapping_version: "1.42"` |
+| `resources/vendor-mapping/invalid-mapping-version-leading-zero-prerelease.json` | `mapping_version: "v1.0.0-01"` (leading-zero numeric pre-release; rejected by tightened SemVer 2.0.0 regex) |
+| `resources/vendor-mapping/invalid-mapping-version-empty-prerelease-segment.json` | `mapping_version: "v1.0.0-."` (empty pre-release segment) |
 | `resources/vendor-mapping/invalid-vendor-slug-uppercase.json` | `vendors[0].id: "Microsoft"` |
 | `resources/vendor-mapping/invalid-service-slug-uppercase.json` | `services[0].id: "Microsoft-Defender"` |
 | `resources/vendor-mapping/invalid-unknown-category.json` | `category: "foo"` |
@@ -933,7 +935,7 @@ Create `src/main/resources/vendor-mapping/schema/v1.json`:
     },
     "SemverString": {
       "type": "string",
-      "pattern": "^v?(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[a-zA-Z0-9.-]+)?(?:\\+[a-zA-Z0-9.-]+)?$"
+      "pattern": "^v?(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$"
     },
     "SourceValue": {
       "type": "string",

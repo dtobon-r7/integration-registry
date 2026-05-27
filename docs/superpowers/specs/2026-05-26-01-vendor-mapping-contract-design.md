@@ -253,7 +253,7 @@ Single Draft 2020-12 document at `src/main/resources/vendor-mapping/schema/v1.js
     },
     "SemverString": {
       "type": "string",
-      "pattern": "^v?(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[a-zA-Z0-9.-]+)?(?:\\+[a-zA-Z0-9.-]+)?$"
+      "pattern": "^v?(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$"
     },
     "SourceValue": {
       "type": "string",
@@ -443,6 +443,8 @@ A small helper at the top of the class loads a fixture path → `JsonNode` and r
 - `validate_shouldReject_whenKindIsWrongValue` — `invalid-wrong-kind.json` (`kind: "VendorMappingV2"`)
 - `validate_shouldReject_whenMappingVersionMissing` — `invalid-missing-mapping-version.json`
 - `validate_shouldReject_whenMappingVersionIsNotSemver` — `invalid-mapping-version-bad-format.json` (`metadata.mapping_version: "1.42"`)
+- `validate_shouldReject_whenMappingVersionHasLeadingZeroPrereleaseSegment` — `invalid-mapping-version-leading-zero-prerelease.json` (`metadata.mapping_version: "v1.0.0-01"`)
+- `validate_shouldReject_whenMappingVersionHasEmptyPrereleaseSegment` — `invalid-mapping-version-empty-prerelease-segment.json` (`metadata.mapping_version: "v1.0.0-."`)
 - `validate_shouldReject_whenVendorSlugFailsRegex` — `invalid-vendor-slug-uppercase.json` (`vendors[0].id: "Microsoft"`)
 - `validate_shouldReject_whenServiceSlugFailsRegex` — `invalid-service-slug-uppercase.json`
 - `validate_shouldReject_whenCategoryNotInEnum` — `invalid-unknown-category.json` (`category: "foo"`)
@@ -452,7 +454,7 @@ A small helper at the top of the class loads a fixture path → `JsonNode` and r
 - `validate_shouldReject_whenUnknownPropertyOnVendor` — `invalid-unknown-property.json` (`vendors[0].deprecated_at: "2026-01-01"`) — proves `additionalProperties: false` is in effect.
 - `validate_shouldReject_whenSourceValueIsEmpty` — `invalid-source-value-empty.json`
 
-**Total: 6 positive + 13 negative = 19 schema-validation tests.**
+**Total: 6 positive + 15 negative = 21 schema-validation tests.**
 
 ### Test fixtures — `src/test/resources/vendor-mapping/`
 
@@ -469,6 +471,8 @@ src/test/resources/vendor-mapping/
 ├── invalid-wrong-kind.json
 ├── invalid-missing-mapping-version.json
 ├── invalid-mapping-version-bad-format.json
+├── invalid-mapping-version-leading-zero-prerelease.json
+├── invalid-mapping-version-empty-prerelease-segment.json
 ├── invalid-vendor-slug-uppercase.json
 ├── invalid-service-slug-uppercase.json
 ├── invalid-unknown-category.json
