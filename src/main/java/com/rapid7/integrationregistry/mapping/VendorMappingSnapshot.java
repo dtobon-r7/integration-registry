@@ -8,6 +8,7 @@ public interface VendorMappingSnapshot {
      *
      * @return resolution result for known triplets, or {@link VendorResolution#unknown()}
      *     for unmapped triplets — never null, never throws on unmapped input.
+     * @throws NullPointerException if any argument is null
      */
     VendorResolution lookup(ProductName productName, SourceType sourceType, String sourceValue);
 
