@@ -7,7 +7,7 @@
  * {@link com.rapid7.integrationregistry.mapping.ProductName}) referenced by the bundle JSON Schema and
  * by the snapshot lookup API.
  *
- * <p>Implementations of {@code VendorMappingSnapshot} live in this package (Plan 02);
+ * <p>Implementations of {@code VendorMappingSnapshot} live in this package;
  * no other internal Registry layer may depend on this package other than {@code aggregator}
  * (enforced by ArchUnit).
  */

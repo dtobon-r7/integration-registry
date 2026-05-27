@@ -14,7 +14,8 @@ public interface VendorMappingSnapshot {
 
     /**
      * The {@code metadata.mapping_version} of the loaded bundle (semver string,
-     * e.g. {@code "v1.42.0"}). Surfaced on every API response by T09.
+     * e.g. {@code "v1.42.0"}). Surfaced on every API response so callers can
+     * correlate results to a specific bundle revision.
      */
     String mappingVersion();
 }
