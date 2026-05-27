@@ -25,7 +25,7 @@ class MvpSeedBundleTest {
     }
 
     @Test
-    void mvpSeed_shouldHaveMappingVersion_v1_0_0() {
+    void mvpSeed_shouldExposeMappingVersion() {
         // Act
         String version = snapshot.mappingVersion();
 

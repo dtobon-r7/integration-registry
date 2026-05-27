@@ -24,6 +24,7 @@ class BundleParseExceptionTest {
         assertThat(ex.getCause()).isSameAs(cause);
         assertThat(ex.getMessage()).contains("yaml syntax error");
         assertThat(ex.validationMessages()).isEmpty();
+        assertThat(ex.validationMessages()).isUnmodifiable();
     }
 
     @Test

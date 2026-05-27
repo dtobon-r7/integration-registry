@@ -84,6 +84,12 @@ public final class BundleParser {
      *       caveat: not caught by {@code BundleParseException}.</li>
      * </ul>
      *
+     * <p>An empty {@code services} array on a vendor (or an empty
+     * {@code data_sources} array on a service) contributes zero index entries
+     * to the resulting snapshot. The schema makes both arrays
+     * {@code required}; the parser tolerates them as legal empty placeholders
+     * for vendors / services staged across multiple bundle revisions.
+     *
      * @throws BundleParseException if the YAML is unparseable or the parsed
      *     document fails JSON Schema validation.
      * @throws IllegalStateException if a schema/enum invariant is violated or
@@ -152,6 +158,10 @@ public final class BundleParser {
                 }
             }
         }
+        // Raw-type bridge: TripletKey is private to MapBackedVendorMappingSnapshot,
+        // so the public-typed index above is Map<Object, ...>. Mirror site:
+        // MapBackedVendorMappingSnapshotTest.construct(...). Replacing the index
+        // implementation requires updating both call sites.
         @SuppressWarnings({"unchecked", "rawtypes"})
         Map typedIndex = index;
         return new MapBackedVendorMappingSnapshot(typedIndex, mappingVersion);

@@ -1,3 +1,6 @@
+# Note: `display_name` fields are required by the JSON Schema (v1) for human
+# readability of the bundle source, but the parser does not propagate them
+# into VendorResolution — that responsibility lives at presentation layers.
 apiVersion: registry.rapid7.com/v1
 kind: VendorMapping
 metadata:
