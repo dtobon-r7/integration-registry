@@ -16,11 +16,11 @@ class BundleSchemaTest {
 
     @BeforeAll
     static void loadSchema() throws IOException {
-        schema = VendorMappingSchemaFixture.loadSchema();
+        schema = BundleSchemaResources.loadSchema();
     }
 
     private Set<ValidationMessage> validateFixture(String fixtureFileName) throws IOException {
-        return schema.validate(VendorMappingSchemaFixture.readFixture(fixtureFileName));
+        return schema.validate(BundleSchemaResources.readFixture(fixtureFileName));
     }
 
     // ---------- Positive cases ----------

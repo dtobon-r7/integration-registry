@@ -21,7 +21,7 @@ class EnumSchemaSyncTest {
 
     @BeforeAll
     static void loadSchema() throws IOException {
-        schemaRoot = VendorMappingSchemaFixture.loadSchemaNode();
+        schemaRoot = BundleSchemaResources.loadSchemaNode();
     }
 
     @Test
@@ -32,7 +32,7 @@ class EnumSchemaSyncTest {
             .collect(Collectors.toSet());
 
         // Act
-        Set<String> schemaWireForms = VendorMappingSchemaFixture.textValuesAt(schemaRoot, CATEGORY_ENUM_POINTER);
+        Set<String> schemaWireForms = BundleSchemaResources.textValuesAt(schemaRoot, CATEGORY_ENUM_POINTER);
 
         // Assert
         assertThat(schemaWireForms)
@@ -48,7 +48,7 @@ class EnumSchemaSyncTest {
             .collect(Collectors.toSet());
 
         // Act
-        Set<String> schemaWireForms = VendorMappingSchemaFixture.textValuesAt(schemaRoot, SOURCE_TYPE_ENUM_POINTER);
+        Set<String> schemaWireForms = BundleSchemaResources.textValuesAt(schemaRoot, SOURCE_TYPE_ENUM_POINTER);
 
         // Assert
         assertThat(schemaWireForms)
@@ -64,7 +64,7 @@ class EnumSchemaSyncTest {
             .collect(Collectors.toSet());
 
         // Act
-        Set<String> schemaWireForms = VendorMappingSchemaFixture.textValuesAt(schemaRoot, PRODUCT_ENUM_POINTER);
+        Set<String> schemaWireForms = BundleSchemaResources.textValuesAt(schemaRoot, PRODUCT_ENUM_POINTER);
 
         // Assert
         assertThat(schemaWireForms)

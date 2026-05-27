@@ -22,14 +22,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  * parsing, the schema/fixture classpath roots, and the JSON-Pointer extraction
  * used by enum-vs-schema sync checks.
  */
-final class VendorMappingSchemaFixture {
+final class BundleSchemaResources {
 
     static final String SCHEMA_CLASSPATH = "/vendor-mapping/schema/v1.json";
     static final String FIXTURES_ROOT = "/vendor-mapping/";
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    private VendorMappingSchemaFixture() {}
+    private BundleSchemaResources() {}
 
     /** Load and parse the bundle JSON Schema (Draft 2020-12). */
     static JsonSchema loadSchema() throws IOException {
@@ -60,7 +60,7 @@ final class VendorMappingSchemaFixture {
     }
 
     private static JsonNode readClasspathJson(String classpathPath) throws IOException {
-        try (InputStream in = VendorMappingSchemaFixture.class.getResourceAsStream(classpathPath)) {
+        try (InputStream in = BundleSchemaResources.class.getResourceAsStream(classpathPath)) {
             assertThat(in)
                 .as("classpath resource %s present", classpathPath)
                 .isNotNull();
