@@ -77,6 +77,9 @@ class BundleParserTest {
             Set<ValidationMessage> messages = ex.validationMessages();
             assertThat(messages).isNotEmpty();
             assertThat(messages).anyMatch(m -> m.getInstanceLocation().toString().contains("source_value"));
+            assertThat(ex.getMessage())
+                .as("schemaInvalid synthesizes a summary from the validation messages")
+                .contains("source_value");
         }
     }
 

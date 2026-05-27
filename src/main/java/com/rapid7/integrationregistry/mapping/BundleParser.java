@@ -20,6 +20,30 @@ import java.util.Set;
  * Parses a vendor-mapping bundle YAML document into an immutable
  * {@link VendorMappingSnapshot}. Stateless and framework-agnostic;
  * Plan 03 wires this into Spring with the S3 fetch and readiness gate.
+ *
+ * <h2>Threading</h2>
+ *
+ * <p>This parser holds two final fields configured in the constructor and is
+ * intended for single-threaded use on the boot / refresh path that Plan 03
+ * owns. {@link com.fasterxml.jackson.databind.ObjectMapper} is documented
+ * thread-safe once configured (which is the case here), but
+ * {@link com.networknt.schema.JsonSchema#validate(com.fasterxml.jackson.databind.JsonNode)}
+ * does not carry an explicit thread-safety guarantee in the
+ * {@code com.networknt:json-schema-validator} 1.5.4 release notes. Callers
+ * sharing a single {@code BundleParser} instance across request-handler
+ * threads must verify the validator's concurrency posture before relying on
+ * it; the boot/refresh use case avoids the question entirely.
+ *
+ * <h2>Input expectations</h2>
+ *
+ * <p>The {@link #parse(java.io.InputStream)} entry point reads the entire
+ * stream into memory via Jackson's YAML factory. The bundle format (defined
+ * by RFC-001 §Vendor mapping) is small by design — vendor / vendor-service /
+ * data-source counts are bounded by the curated catalog, not by user input —
+ * so the parser does not impose explicit size, depth, or alias caps. The
+ * trust boundary is owned by Plan 03's S3 fetch (the bundle is curated in-
+ * repo and shipped via a CI publish pipeline; the loader is responsible for
+ * any threat-model hardening such as SnakeYAML {@code LoaderOptions} caps).
  */
 public final class BundleParser {
 
@@ -37,9 +61,35 @@ public final class BundleParser {
     /**
      * Parse, schema-validate, and index a bundle YAML document.
      *
+     * <p>Failures fall into three classes:
+     *
+     * <ul>
+     *   <li><b>Bundle-data failures</b> — surface as
+     *       {@link BundleParseException} (checked). YAML-syntax errors carry
+     *       the underlying Jackson exception as their cause; schema-validation
+     *       failures carry the validator's structured
+     *       {@code Set<ValidationMessage>} via
+     *       {@link BundleParseException#validationMessages()}.</li>
+     *   <li><b>Schema/enum-sync drift</b> — propagates as
+     *       {@link IllegalStateException} (unchecked) when a schema-validated
+     *       wire form does not map through {@code fromWireForm()}. This is a
+     *       build-time invariant violation that the {@code EnumSchemaSyncTest}
+     *       in Plan 01 is the first line of defense against; it is NOT caught
+     *       by {@code BundleParseException}. Callers that need to handle every
+     *       parse failure (e.g. the readiness-gate loader) must catch it
+     *       explicitly.</li>
+     *   <li><b>Packaging defects</b> — propagate as
+     *       {@link IllegalStateException} (unchecked) when the bundled JSON
+     *       Schema resource is missing or unreadable from the classpath. Same
+     *       caveat: not caught by {@code BundleParseException}.</li>
+     * </ul>
+     *
      * @throws BundleParseException if the YAML is unparseable or the parsed
      *     document fails JSON Schema validation.
-     * @throws NullPointerException if {@code yamlStream} is null
+     * @throws IllegalStateException if a schema/enum invariant is violated or
+     *     the bundled schema resource is missing/unreadable. See the failure
+     *     classes above.
+     * @throws NullPointerException if {@code yamlStream} is null.
      */
     public VendorMappingSnapshot parse(InputStream yamlStream) throws BundleParseException {
         Objects.requireNonNull(yamlStream, FIELD_YAML_STREAM);
