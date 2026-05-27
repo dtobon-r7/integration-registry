@@ -1,6 +1,9 @@
 package com.rapid7.integrationregistry.mapping;
 
 import com.networknt.schema.ValidationMessage;
+import com.rapid7.integrationregistry.adapter.exception.AdapterAuthException;
+import com.rapid7.integrationregistry.adapter.exception.AdapterTimeoutException;
+import com.rapid7.integrationregistry.adapter.exception.AdapterUpstreamException;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -61,5 +64,22 @@ class BundleParseExceptionTest {
 
         // Act / Assert
         assertThat(ex.validationMessages()).isUnmodifiable();
+    }
+
+    @Test
+    void independentlyCatchable_shouldNotShareParentWithAdapterExceptions_whenThrown() {
+        // Arrange
+        // If a future refactor introduces a shared parent above Exception
+        // (e.g., a "RegistryException" abstract class) for either family,
+        // these isNotInstanceOf assertions will fail. The two exception
+        // families (mapping.BundleParseException and adapter.exception.*)
+        // are deliberately independent — see ADR-0001.
+
+        // Act / Assert
+        BundleParseException caught = BundleParseException.yamlSyntaxError(new java.io.IOException("test"));
+        assertThat(caught)
+            .isNotInstanceOf(AdapterAuthException.class)
+            .isNotInstanceOf(AdapterTimeoutException.class)
+            .isNotInstanceOf(AdapterUpstreamException.class);
     }
 }
