@@ -7,9 +7,9 @@ import java.util.stream.Collectors;
 
 /**
  * Thrown by {@link BundleParser#parse} when the input cannot be parsed as YAML
- * or when the parsed document fails JSON Schema validation. Caught by Plan 03's
- * boot-time loader and mapped to a readiness-probe-down state plus a structured
- * log entry built from {@link #validationMessages()}.
+ * or when the parsed document fails JSON Schema validation. Caught by the
+ * bundle's boot-time loader, which maps it to a readiness-probe-down state
+ * plus a structured log entry built from {@link #validationMessages()}.
  *
  * <p>For YAML syntax failures, the underlying Jackson exception is the cause
  * and {@link #validationMessages()} is empty. For schema-validation failures,
