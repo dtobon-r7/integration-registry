@@ -17,6 +17,10 @@ class LayerDependencyRulesTest {
             LayerDependencyRules.serviceLayer_shouldNotDependOnWebLayer;
 
     @ArchTest
+    static final ArchRule serviceLayer_shouldNotDependOnMappingLayer =
+            LayerDependencyRules.serviceLayer_shouldNotDependOnMappingLayer;
+
+    @ArchTest
     static final ArchRule coordinatorLayer_shouldNotDependOnDisallowedLayers =
             LayerDependencyRules.coordinatorLayer_shouldNotDependOnDisallowedLayers;
 

@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://registry.rapid7.com/schemas/vendor-mapping/v1.json",
+  "title": "VendorMapping bundle (registry.rapid7.com/v1)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": { "const": "registry.rapid7.com/v1" },
+    "kind":       { "const": "VendorMapping" },
+    "metadata":   { "$ref": "#/$defs/Metadata" },
+    "spec":       { "$ref": "#/$defs/Spec" }
+  },
+  "$defs": {
+    "Slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9_-]+$"
+    },
+    "SemverString": {
+      "type": "string",
+      "pattern": "^v?(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$"
+    },
+    "SourceValue": {
+      "type": "string",
+      "minLength": 1,
+      "not": { "pattern": "\\|" }
+    },
+    "Metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mapping_version"],
+      "properties": {
+        "mapping_version": { "$ref": "#/$defs/SemverString" }
+      }
+    },
+    "Spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["vendors"],
+      "properties": {
+        "vendors": { "type": "array", "items": { "$ref": "#/$defs/Vendor" } }
+      }
+    },
+    "Vendor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name"],
+      "properties": {
+        "id":       { "$ref": "#/$defs/Slug" },
+        "name":     { "type": "string", "minLength": 1 },
+        "services": { "type": "array", "items": { "$ref": "#/$defs/VendorService" } }
+      }
+    },
+    "VendorService": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "category"],
+      "properties": {
+        "id":           { "$ref": "#/$defs/Slug" },
+        "name":         { "type": "string", "minLength": 1 },
+        "category":     { "enum": ["cloud_provider","identity","itsm","siem","edr","notification","other"] },
+        "data_sources": { "type": "array", "items": { "$ref": "#/$defs/DataSource" } }
+      }
+    },
+    "DataSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["product", "source_type", "source_value", "display_name"],
+      "properties": {
+        "product":      { "enum": ["InsightIDR","InsightConnect","Surface Command","InsightVM","InsightCloudSec","InsightAppSec"] },
+        "source_type":  { "enum": ["plugin_name","product_type","product_name","integration_id"] },
+        "source_value": { "$ref": "#/$defs/SourceValue" },
+        "display_name": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

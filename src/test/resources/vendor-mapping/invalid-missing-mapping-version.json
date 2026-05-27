@@ -1,0 +1,6 @@
+{
+  "apiVersion": "registry.rapid7.com/v1",
+  "kind": "VendorMapping",
+  "metadata": {},
+  "spec": { "vendors": [] }
+}
