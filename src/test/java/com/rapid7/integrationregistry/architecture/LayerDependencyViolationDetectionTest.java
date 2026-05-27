@@ -29,4 +29,13 @@ class LayerDependencyViolationDetectionTest {
         assertTrue(result.hasViolation(),
                 "Expected ArchUnit to detect service→HTTP violation from fixture class");
     }
+
+    @Test
+    void serviceLayer_shouldDetectMappingViolation() {
+        EvaluationResult result = LayerDependencyRules.serviceLayer_shouldNotDependOnMappingLayer
+                .evaluate(allClasses);
+
+        assertTrue(result.hasViolation(),
+                "Expected ArchUnit to detect service→mapping violation from fixture class");
+    }
 }

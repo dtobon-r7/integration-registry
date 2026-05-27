@@ -16,6 +16,10 @@ final class LayerDependencyRules {
                     .should().dependOnClassesThat().resideInAnyPackage(
                             "jakarta.servlet..", "org.springframework.web..", "org.springframework.http..");
 
+    static final ArchRule serviceLayer_shouldNotDependOnMappingLayer =
+            noClasses().that().resideInAPackage("..service..")
+                    .should().dependOnClassesThat().resideInAnyPackage("..mapping..");
+
     static final ArchRule coordinatorLayer_shouldNotDependOnDisallowedLayers =
             noClasses().that().resideInAPackage("..coordinator..")
                     .should().dependOnClassesThat().resideInAnyPackage(
