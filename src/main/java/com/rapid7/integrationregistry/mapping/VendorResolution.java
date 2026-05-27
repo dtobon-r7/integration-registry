@@ -2,6 +2,19 @@ package com.rapid7.integrationregistry.mapping;
 
 import java.util.Objects;
 
+/**
+ * Result of resolving a raw product source identifier to canonical vendor /
+ * vendor-service identity, per RFC-001 §Vendor mapping → Bundle lifecycle.
+ *
+ * <p>Field values are expected to satisfy the bundle JSON Schema
+ * ({@code /vendor-mapping/schema/v1.json}): non-null (enforced by the compact
+ * constructor), non-empty, and free of the reserved {@code |} character in
+ * identifier-bearing fields. The schema-validating bundle parser (Plan 02) is
+ * the canonical producer; any other producer must enforce equivalent invariants.
+ *
+ * <p>Use {@link #unknown()} for unmapped triplets per the synthetic-triplet
+ * contract.
+ */
 public record VendorResolution(
     String vendorServiceId,
     String vendorServiceName,
