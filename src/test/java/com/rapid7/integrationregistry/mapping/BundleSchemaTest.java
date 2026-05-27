@@ -124,6 +124,20 @@ class BundleSchemaTest {
     }
 
     @Test
+    void validate_shouldReject_whenMappingVersionHasLeadingZeroPrereleaseSegment() throws IOException {
+        Set<ValidationMessage> errors = validateFixture("invalid-mapping-version-leading-zero-prerelease.json");
+        assertThat(errors).isNotEmpty();
+        assertThat(errors).anyMatch(m -> m.getInstanceLocation().toString().contains(".metadata.mapping_version"));
+    }
+
+    @Test
+    void validate_shouldReject_whenMappingVersionHasEmptyPrereleaseSegment() throws IOException {
+        Set<ValidationMessage> errors = validateFixture("invalid-mapping-version-empty-prerelease-segment.json");
+        assertThat(errors).isNotEmpty();
+        assertThat(errors).anyMatch(m -> m.getInstanceLocation().toString().contains(".metadata.mapping_version"));
+    }
+
+    @Test
     void validate_shouldReject_whenVendorSlugFailsRegex() throws IOException {
         Set<ValidationMessage> errors = validateFixture("invalid-vendor-slug-uppercase.json");
         assertThat(errors).isNotEmpty();
