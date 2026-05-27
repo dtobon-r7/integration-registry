@@ -1,0 +1,17 @@
+apiVersion: registry.rapid7.com/v1
+kind: VendorMapping
+metadata:
+  mapping_version: v1.0.0
+spec:
+  vendors:
+    - id: microsoft
+      name: Microsoft
+      services:
+        - id: microsoft-defender
+          name: Microsoft Defender
+          category: edr
+          data_sources:
+            - product: InsightIDR
+              source_type: product_type
+              source_value: microsoft-defender-endpoint
+              display_name: Microsoft Defender for Endpoint
