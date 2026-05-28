@@ -134,16 +134,8 @@ class BundleLoadExceptionTest {
 
     @Test
     void independentlyCatchable_shouldNotBeAdapterExceptionOrSibling_whenThrown() {
-        // Arrange
-        // ADR-001 family-independence rule: the bundle family and the adapter
-        // family are mutually independent. A BundleLoadException is not
-        // assignable to AdapterException (the adapter family parent) — so a
-        // catch (AdapterException) clause never picks up a bundle exception.
-        // Sibling distinctness within the bundle family is also asserted:
-        // BundleLoadException and BundleParseException are not assignable to
-        // each other.
-
-        // Act / Assert
+        // ADR-001: family-independence (vs adapter) and sibling distinctness
+        // (vs BundleParseException) are both required.
         BundleLoadException caught = BundleLoadException.s3FetchFailed(new IOException("test"));
         assertThat(caught)
             .isNotInstanceOf(AdapterException.class)

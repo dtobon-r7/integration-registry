@@ -13,13 +13,9 @@ import java.util.Optional;
  * <p>Payload-style exception per ADR-001: the structured payload is the
  * optional {@link #path()} (populated for cache I/O failures); the
  * underlying {@link Throwable} cause discriminates the remaining failure
- * modes via the named static factories.
- *
- * <p>The bundle exception family deliberately has no shared parent class
- * (ADR-001). The two siblings ({@link BundleParseException} and
- * {@link BundleLoadException}) have only one consumer (the boot-time
- * listener) which uses Java multi-catch. Adding a parent here would be
- * ceremony with no benefit — do not introduce one.
+ * modes via the named static factories. See the package Javadoc
+ * ({@link com.rapid7.integrationregistry.mapping.exception}) for the
+ * family's no-parent rule.
  */
 public class BundleLoadException extends Exception {
 

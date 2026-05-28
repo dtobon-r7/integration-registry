@@ -66,13 +66,7 @@ class BundleParseExceptionTest {
 
     @Test
     void independentlyCatchable_shouldNotBeAdapterException_whenThrown() {
-        // Arrange
-        // ADR-001 family-independence rule: the bundle family and the adapter
-        // family are mutually independent. A bundle exception is not
-        // assignable to AdapterException (the adapter family parent), so a
-        // catch (AdapterException) clause never picks up a bundle exception.
-
-        // Act / Assert
+        // ADR-001: bundle and adapter families are mutually independent.
         BundleParseException caught = BundleParseException.yamlSyntaxError(new IOException("test"));
         assertThat(caught).isNotInstanceOf(AdapterException.class);
     }

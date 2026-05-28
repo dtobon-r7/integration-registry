@@ -50,16 +50,10 @@ class AdapterExceptionsTest {
 
     @Test
     void parentClass_shouldBeAdapterException_forAllConcreteSubclasses() {
-        // Arrange / Act
         AdapterAuthException auth = new AdapterAuthException("auth");
         AdapterTimeoutException timeout = new AdapterTimeoutException("timeout");
         AdapterUpstreamException upstream = new AdapterUpstreamException("upstream");
 
-        // Assert — ADR-001 family-parent rule: every concrete adapter
-        // exception extends AdapterException directly.
-        assertThat(auth).isInstanceOf(AdapterException.class);
-        assertThat(timeout).isInstanceOf(AdapterException.class);
-        assertThat(upstream).isInstanceOf(AdapterException.class);
         assertThat(auth.getClass().getSuperclass()).isEqualTo(AdapterException.class);
         assertThat(timeout.getClass().getSuperclass()).isEqualTo(AdapterException.class);
         assertThat(upstream.getClass().getSuperclass()).isEqualTo(AdapterException.class);
@@ -67,15 +61,8 @@ class AdapterExceptionsTest {
 
     @Test
     void independentlyCatchable_shouldDistinguishEachType_whenThrownInSeparateBlocks() {
-        // Arrange
-        // Each concrete type extends AdapterException (asserted in
-        // parentClass_shouldBeAdapterException_forAllConcreteSubclasses)
-        // but the three siblings remain distinguishable from each other:
-        // catching one does NOT match the other two. If a future refactor
-        // made one sibling inherit from another, the negative
-        // isNotInstanceOf assertions would fail.
-
-        // Act + Assert — Timeout
+        // Sibling distinctness: a future refactor making one sibling inherit
+        // from another would break the negative isNotInstanceOf assertions.
         try {
             throw new AdapterTimeoutException("timeout");
         } catch (AdapterTimeoutException caught) {
@@ -84,7 +71,6 @@ class AdapterExceptionsTest {
                     .isNotInstanceOf(AdapterUpstreamException.class);
         }
 
-        // Act + Assert — Auth
         try {
             throw new AdapterAuthException("auth");
         } catch (AdapterAuthException caught) {
@@ -93,7 +79,6 @@ class AdapterExceptionsTest {
                     .isNotInstanceOf(AdapterUpstreamException.class);
         }
 
-        // Act + Assert — Upstream
         try {
             throw new AdapterUpstreamException("upstream");
         } catch (AdapterUpstreamException caught) {
@@ -105,14 +90,6 @@ class AdapterExceptionsTest {
 
     @Test
     void familyIndependence_shouldNotBeBundleException_whenAdapterExceptionThrown() {
-        // Arrange
-        // ADR-001 family-independence rule: the adapter family and the bundle
-        // family are mutually independent. An AdapterException is not
-        // assignable to any bundle exception type, and vice versa
-        // (asserted symmetrically in BundleParseExceptionTest /
-        // BundleLoadExceptionTest).
-
-        // Act / Assert
         AdapterException caught = new AdapterAuthException("auth");
         assertThat(caught)
             .isNotInstanceOf(BundleParseException.class)

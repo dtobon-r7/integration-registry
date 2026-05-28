@@ -19,13 +19,9 @@ import java.util.stream.Collectors;
  *
  * <p>Payload-style exception per ADR-001: structured data on the failure
  * (the validation messages) is accessible via the dedicated accessor; the
- * human-readable summary is available via {@link #getMessage()}.
- *
- * <p>The bundle exception family deliberately has no shared parent class
- * (ADR-001). The two siblings ({@link BundleParseException} and
- * {@link BundleLoadException}) have only one consumer (the boot-time
- * listener) which uses Java multi-catch. Adding a parent here would be
- * ceremony with no benefit — do not introduce one.
+ * human-readable summary is available via {@link #getMessage()}. See the
+ * package Javadoc ({@link com.rapid7.integrationregistry.mapping.exception})
+ * for the family's no-parent rule.
  */
 public class BundleParseException extends Exception {
 
