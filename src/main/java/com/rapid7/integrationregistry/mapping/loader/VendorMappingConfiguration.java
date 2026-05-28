@@ -4,7 +4,6 @@ import com.rapid7.integrationregistry.mapping.BundleParser;
 import com.rapid7.integrationregistry.mapping.VendorMappingSnapshot;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -57,8 +56,14 @@ public class VendorMappingConfiguration {
     public BundleLoadListener bundleLoadListener(
             S3VendorMappingBundleLoader loader,
             VendorMappingSnapshotHolder holder,
-            VendorMappingProperties properties,
-            ApplicationEventPublisher events) {
-        return new BundleLoadListener(loader, holder, properties, events);
+            VendorMappingProperties properties) {
+        return new BundleLoadListener(loader, holder, properties);
+    }
+
+    @Bean
+    public BundleLoadHealthIndicator bundleLoadHealthIndicator(
+            VendorMappingSnapshotHolder holder,
+            VendorMappingProperties properties) {
+        return new BundleLoadHealthIndicator(holder, properties);
     }
 }

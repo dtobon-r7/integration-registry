@@ -13,23 +13,17 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InOrder;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.availability.AvailabilityChangeEvent;
-import org.springframework.boot.availability.ReadinessState;
 import org.springframework.boot.context.event.ApplicationStartedEvent;
-import org.springframework.context.ApplicationEventPublisher;
 
 import java.io.IOException;
 import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class BundleLoadListenerTest {
@@ -37,7 +31,6 @@ class BundleLoadListenerTest {
     private S3VendorMappingBundleLoader loader;
     private VendorMappingSnapshotHolder holder;
     private VendorMappingProperties properties;
-    private ApplicationEventPublisher events;
     private BundleLoadListener listener;
 
     private ListAppender<ILoggingEvent> appender;
@@ -48,8 +41,7 @@ class BundleLoadListenerTest {
         loader = mock(S3VendorMappingBundleLoader.class);
         holder = mock(VendorMappingSnapshotHolder.class);
         properties = new VendorMappingProperties("v1.0.0", "test-bucket", "registry/mappings/", Path.of("/tmp"));
-        events = mock(ApplicationEventPublisher.class);
-        listener = new BundleLoadListener(loader, holder, properties, events);
+        listener = new BundleLoadListener(loader, holder, properties);
 
         logger = (Logger) LoggerFactory.getLogger(BundleLoadListener.class);
         appender = new ListAppender<>();
@@ -76,41 +68,6 @@ class BundleLoadListenerTest {
     }
 
     @Test
-    void onApplicationEvent_shouldPublishRefusing_thenAccepting_whenLoadSucceeds() throws Exception {
-        // Arrange
-        when(loader.load()).thenReturn(stubSnapshot("v1.0.0"));
-
-        // Act
-        listener.onApplicationEvent(mock(ApplicationStartedEvent.class));
-
-        // Assert
-        InOrder eventOrder = inOrder(events, holder);
-        ArgumentCaptor<AvailabilityChangeEvent> firstEvent = ArgumentCaptor.forClass(AvailabilityChangeEvent.class);
-        ArgumentCaptor<AvailabilityChangeEvent> secondEvent = ArgumentCaptor.forClass(AvailabilityChangeEvent.class);
-        eventOrder.verify(events).publishEvent(firstEvent.capture());
-        eventOrder.verify(holder).set(any(VendorMappingSnapshot.class));
-        eventOrder.verify(events).publishEvent(secondEvent.capture());
-
-        assertThat(firstEvent.getValue().getState()).isEqualTo(ReadinessState.REFUSING_TRAFFIC);
-        assertThat(secondEvent.getValue().getState()).isEqualTo(ReadinessState.ACCEPTING_TRAFFIC);
-    }
-
-    @Test
-    void onApplicationEvent_shouldPublishRefusing_only_whenLoadFails() throws Exception {
-        // Arrange
-        when(loader.load()).thenThrow(BundleLoadException.s3FetchFailed(new IOException("boom")));
-
-        // Act
-        listener.onApplicationEvent(mock(ApplicationStartedEvent.class));
-
-        // Assert
-        ArgumentCaptor<AvailabilityChangeEvent> capture = ArgumentCaptor.forClass(AvailabilityChangeEvent.class);
-        verify(events).publishEvent(capture.capture());   // exactly once
-        assertThat(capture.getValue().getState()).isEqualTo(ReadinessState.REFUSING_TRAFFIC);
-        verifyNoInteractions(holder);
-    }
-
-    @Test
     void onApplicationEvent_shouldPopulateHolder_whenLoadSucceeds() throws Exception {
         // Arrange
         VendorMappingSnapshot loaded = stubSnapshot("v1.0.0");
@@ -119,9 +76,7 @@ class BundleLoadListenerTest {
         // Act
         listener.onApplicationEvent(mock(ApplicationStartedEvent.class));
 
-        // Assert — the holder receives a decorator wrapping the loaded snapshot,
-        // so the captured argument is a LoggingVendorMappingSnapshot whose
-        // mappingVersion() delegates to the loaded snapshot's "v1.0.0".
+        // Assert — the holder receives a decorator wrapping the loaded snapshot.
         ArgumentCaptor<VendorMappingSnapshot> setCaptor =
             ArgumentCaptor.forClass(VendorMappingSnapshot.class);
         verify(holder).set(setCaptor.capture());
@@ -158,7 +113,7 @@ class BundleLoadListenerTest {
         String formatted = errorEvent.getFormattedMessage();
         assertThat(formatted)
             .contains("Vendor mapping bundle load failed")
-            .contains("readiness will remain REFUSING_TRAFFIC")
+            .contains("readiness will report DOWN")
             .contains("BundleLoadException")
             .contains("v1.0.0")
             .contains("test-bucket")
@@ -194,12 +149,8 @@ class BundleLoadListenerTest {
         // Act
         listener.onApplicationEvent(mock(ApplicationStartedEvent.class));
 
-        // Assert — readiness stays at REFUSING; holder is not populated;
-        // ERROR log captures the unchecked failure with failure_class=NullPointerException.
-        ArgumentCaptor<AvailabilityChangeEvent> capture = ArgumentCaptor.forClass(AvailabilityChangeEvent.class);
-        verify(events).publishEvent(capture.capture());   // exactly one event
-        assertThat(capture.getValue().getState()).isEqualTo(ReadinessState.REFUSING_TRAFFIC);
-        verifyNoInteractions(holder);
+        // Assert — holder is not populated; ERROR log captures the unchecked failure.
+        verify(holder, never()).set(any());
 
         ILoggingEvent errorEvent = appender.list.stream()
             .filter(e -> e.getLevel() == Level.ERROR)
@@ -209,5 +160,18 @@ class BundleLoadListenerTest {
             .contains("Vendor mapping bundle load failed")
             .contains("NullPointerException")
             .contains("S3Client returned null");
+    }
+
+    @Test
+    void onApplicationEvent_shouldSkipLoad_whenHolderAlreadyLoaded() throws Exception {
+        // Arrange — defensive guard against re-firing the event in tests.
+        when(holder.isLoaded()).thenReturn(true);
+
+        // Act
+        listener.onApplicationEvent(mock(ApplicationStartedEvent.class));
+
+        // Assert — no load attempt, no holder mutation.
+        verify(loader, never()).load();
+        verify(holder, never()).set(any());
     }
 }

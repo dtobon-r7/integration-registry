@@ -33,6 +33,16 @@ final class VendorMappingSnapshotHolder implements VendorMappingSnapshot {
         }
     }
 
+    /**
+     * Non-throwing check used by the readiness {@code HealthIndicator} to
+     * report DOWN before the bundle has been loaded. Distinct from
+     * {@link #lookup} / {@link #mappingVersion}, which throw to signal a
+     * misconfigured probe.
+     */
+    boolean isLoaded() {
+        return ref.get() != null;
+    }
+
     @Override
     public VendorResolution lookup(ProductName productName, SourceType sourceType, String sourceValue) {
         return current().lookup(productName, sourceType, sourceValue);

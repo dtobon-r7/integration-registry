@@ -101,4 +101,23 @@ class VendorMappingSnapshotHolderTest {
             .isThrownBy(() -> holder.set(null))
             .withMessage("snapshot");
     }
+
+    @Test
+    void isLoaded_shouldReturnFalse_whenNotYetSet() {
+        // Arrange
+        VendorMappingSnapshotHolder holder = new VendorMappingSnapshotHolder();
+
+        // Act / Assert
+        assertThat(holder.isLoaded()).isFalse();
+    }
+
+    @Test
+    void isLoaded_shouldReturnTrue_whenSet() {
+        // Arrange
+        VendorMappingSnapshotHolder holder = new VendorMappingSnapshotHolder();
+        holder.set(stubSnapshot("v1.0.0", VendorResolution.unknown()));
+
+        // Act / Assert
+        assertThat(holder.isLoaded()).isTrue();
+    }
 }
