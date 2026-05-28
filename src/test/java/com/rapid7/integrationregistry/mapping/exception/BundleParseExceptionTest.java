@@ -1,9 +1,7 @@
 package com.rapid7.integrationregistry.mapping.exception;
 
 import com.networknt.schema.ValidationMessage;
-import com.rapid7.integrationregistry.adapter.exception.AdapterAuthException;
-import com.rapid7.integrationregistry.adapter.exception.AdapterTimeoutException;
-import com.rapid7.integrationregistry.adapter.exception.AdapterUpstreamException;
+import com.rapid7.integrationregistry.adapter.exception.AdapterException;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -67,19 +65,15 @@ class BundleParseExceptionTest {
     }
 
     @Test
-    void independentlyCatchable_shouldNotShareParentWithAdapterExceptions_whenThrown() {
+    void independentlyCatchable_shouldNotBeAdapterException_whenThrown() {
         // Arrange
-        // If a future refactor introduces a shared parent above Exception
-        // (e.g., a "RegistryException" abstract class) for either family,
-        // these isNotInstanceOf assertions will fail. The two exception
-        // families (mapping.exception.BundleParseException and adapter.exception.*)
-        // are deliberately independent — see ADR-0001.
+        // ADR-001 family-independence rule: the bundle family and the adapter
+        // family are mutually independent. A bundle exception is not
+        // assignable to AdapterException (the adapter family parent), so a
+        // catch (AdapterException) clause never picks up a bundle exception.
 
         // Act / Assert
-        BundleParseException caught = BundleParseException.yamlSyntaxError(new java.io.IOException("test"));
-        assertThat(caught)
-            .isNotInstanceOf(AdapterAuthException.class)
-            .isNotInstanceOf(AdapterTimeoutException.class)
-            .isNotInstanceOf(AdapterUpstreamException.class);
+        BundleParseException caught = BundleParseException.yamlSyntaxError(new IOException("test"));
+        assertThat(caught).isNotInstanceOf(AdapterException.class);
     }
 }
