@@ -7,6 +7,8 @@ package com.rapid7.integrationregistry.adapter.exception;
  */
 public class AdapterTimeoutException extends Exception {
 
+    private static final long serialVersionUID = 1L;
+
     public AdapterTimeoutException(String message) {
         super(message);
     }

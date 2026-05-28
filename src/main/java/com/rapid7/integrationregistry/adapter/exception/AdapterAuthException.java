@@ -7,6 +7,8 @@ package com.rapid7.integrationregistry.adapter.exception;
  */
 public class AdapterAuthException extends Exception {
 
+    private static final long serialVersionUID = 1L;
+
     public AdapterAuthException(String message) {
         super(message);
     }
