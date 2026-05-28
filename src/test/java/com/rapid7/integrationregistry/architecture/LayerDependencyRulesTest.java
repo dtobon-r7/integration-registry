@@ -31,4 +31,8 @@ class LayerDependencyRulesTest {
     @ArchTest
     static final ArchRule adapterLayer_shouldNotDependOnInternalLayers =
             LayerDependencyRules.adapterLayer_shouldNotDependOnInternalLayers;
+
+    @ArchTest
+    static final ArchRule mappingCoreLayer_shouldNotDependOnFrameworks =
+            LayerDependencyRules.mappingCoreLayer_shouldNotDependOnFrameworks;
 }

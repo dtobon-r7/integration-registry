@@ -35,5 +35,11 @@ final class LayerDependencyRules {
                     .should().dependOnClassesThat().resideInAnyPackage(
                             "..controller..", "..service..", "..coordinator..", "..aggregator..", "..mapping..");
 
+    static final ArchRule mappingCoreLayer_shouldNotDependOnFrameworks =
+            noClasses().that().resideInAPackage("..mapping..")
+                    .and().resideOutsideOfPackages("..mapping.loader..", "..mapping.exception..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "org.springframework..", "software.amazon.awssdk..");
+
     private LayerDependencyRules() {}
 }
