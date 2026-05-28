@@ -33,13 +33,19 @@ public class VendorMappingConfiguration {
     }
 
     /**
-     * Single holder bean — registered once so that Spring autowiring resolves
-     * both {@code @Autowired VendorMappingSnapshotHolder} (the listener's
-     * write-side dependency) and {@code @Autowired VendorMappingSnapshot}
-     * (downstream read-side consumers) against the same instance. Registering
-     * a second {@link VendorMappingSnapshot} factory method that returns the
-     * same holder produces two beans of class {@code VendorMappingSnapshotHolder}
-     * and breaks holder autowiring with a NoUniqueBeanDefinitionException.
+     * Single holder bean. Spring's structural-autowiring rules apply here:
+     * because {@link VendorMappingSnapshotHolder} implements
+     * {@link VendorMappingSnapshot}, by-type autowiring of either type resolves
+     * to this same bean. Downstream consumers (T08 aggregator, future read-API
+     * code) can therefore inject {@code @Autowired VendorMappingSnapshot} and
+     * the listener / health indicator can inject
+     * {@code @Autowired VendorMappingSnapshotHolder} — both find this bean.
+     *
+     * <p>A second {@code @Bean} factory method returning the same holder under
+     * the {@code VendorMappingSnapshot} type would not work: Spring inspects
+     * the runtime return value of factory methods, so the registry would see
+     * two beans of type {@code VendorMappingSnapshotHolder} and break holder
+     * autowiring with {@code NoUniqueBeanDefinitionException}.
      */
     @Bean
     public VendorMappingSnapshotHolder vendorMappingSnapshotHolder() {

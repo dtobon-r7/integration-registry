@@ -37,6 +37,7 @@ import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 
@@ -92,6 +93,23 @@ class VendorMappingBootIntegrationTest {
             assertThat(stream).as("mvp-seed.yaml present on classpath").isNotNull();
             mvpSeedYaml = stream.readAllBytes();
         }
+    }
+
+    /**
+     * {@code @TempDir static Path sharedTempDir} persists across
+     * {@code @DirtiesContext(BEFORE_EACH_TEST_METHOD)} rebuilds, so a successful
+     * load in one nested scenario leaves a valid cache file behind that the next
+     * scenario's framework-fired listener invocation would happily read —
+     * short-circuiting the S3-throws / invalid-bundle paths via
+     * {@code holder.isLoaded()} once the manual re-fire runs. Wiping the cache
+     * before each test guarantees every scenario starts cold. Outer-class
+     * {@code @BeforeEach} runs before nested-class {@code @BeforeEach} per
+     * JUnit 5 spec, so this lands first.
+     */
+    @BeforeEach
+    void wipeCacheBeforeEachTest() throws IOException {
+        Path cacheFile = sharedTempDir.resolve("vendor-mapping-v1.0.0.tgz");
+        Files.deleteIfExists(cacheFile);
     }
 
     private static ResponseBytes<GetObjectResponse> responseBytesOf(byte[] body) {

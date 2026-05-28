@@ -72,7 +72,9 @@ final class BundleLoadListener implements ApplicationListener<ApplicationStarted
         if (holder.isLoaded()) {
             // Defensive: the listener should fire once per context. If it fires
             // again (e.g., a test re-publishing the event), skip — the holder
-            // is one-shot and a second set() would throw.
+            // is one-shot and a second set() would throw. DEBUG-log so the
+            // re-fire is observable in operational logs rather than silent.
+            log.debug("Vendor mapping bundle already loaded; skipping load on repeat event");
             return;
         }
         VendorMappingSnapshot loaded;

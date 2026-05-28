@@ -241,6 +241,72 @@ class S3VendorMappingBundleLoaderTest {
     }
 
     @Test
+    void load_shouldThrowArchiveExtractFailed_whenBundleExceedsCompressedSizeCap() {
+        // Arrange — 50 MB + 1 byte synthetic payload; content does not need to
+        // be a valid tgz because the size check fires before any unzip work.
+        byte[] oversized = new byte[(int) (50L * 1024 * 1024) + 1];
+        when(s3Client.getObject(any(GetObjectRequest.class), any(ResponseTransformer.class)))
+            .thenReturn(responseBytesOf(oversized));
+
+        // Act / Assert
+        BundleLoadException thrown = assertThatExceptionOfType(BundleLoadException.class)
+            .isThrownBy(() -> loader.load())
+            .actual();
+        assertThat(thrown.getMessage()).contains("archive could not be extracted");
+        assertThat(thrown.getCause()).isInstanceOf(IllegalStateException.class);
+        assertThat(thrown.getCause().getMessage()).contains("compressed size cap");
+    }
+
+    @Test
+    void load_shouldThrowArchiveExtractFailed_whenTarballHasMultipleEntries() throws Exception {
+        // Arrange — first entry is the canonical "vendor-mapping.yaml" with valid content,
+        // but a second entry follows; the new guard must reject this even though entry #1
+        // would parse successfully.
+        byte[] mvpBytes = readMvpSeed();
+        byte[] tgz = buildMultiEntryTgz(mvpBytes);
+        when(s3Client.getObject(any(GetObjectRequest.class), any(ResponseTransformer.class)))
+            .thenReturn(responseBytesOf(tgz));
+
+        // Act / Assert
+        BundleLoadException thrown = assertThatExceptionOfType(BundleLoadException.class)
+            .isThrownBy(() -> loader.load())
+            .actual();
+        assertThat(thrown.getMessage()).contains("archive could not be extracted");
+        assertThat(thrown.getCause()).isInstanceOf(IllegalStateException.class);
+        assertThat(thrown.getCause().getMessage()).contains("more than one entry");
+    }
+
+    private static byte[] buildMultiEntryTgz(byte[] firstEntryContent) {
+        try (java.io.ByteArrayOutputStream byteOut = new java.io.ByteArrayOutputStream();
+             org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream gzipOut =
+                 new org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream(byteOut);
+             org.apache.commons.compress.archivers.tar.TarArchiveOutputStream tarOut =
+                 new org.apache.commons.compress.archivers.tar.TarArchiveOutputStream(gzipOut)) {
+            org.apache.commons.compress.archivers.tar.TarArchiveEntry first =
+                new org.apache.commons.compress.archivers.tar.TarArchiveEntry(ENTRY_NAME);
+            first.setSize(firstEntryContent.length);
+            tarOut.putArchiveEntry(first);
+            tarOut.write(firstEntryContent);
+            tarOut.closeArchiveEntry();
+
+            byte[] extraContent = "extra".getBytes(StandardCharsets.UTF_8);
+            org.apache.commons.compress.archivers.tar.TarArchiveEntry second =
+                new org.apache.commons.compress.archivers.tar.TarArchiveEntry("extra-file.txt");
+            second.setSize(extraContent.length);
+            tarOut.putArchiveEntry(second);
+            tarOut.write(extraContent);
+            tarOut.closeArchiveEntry();
+
+            tarOut.finish();
+            tarOut.close();
+            gzipOut.close();
+            return byteOut.toByteArray();
+        } catch (IOException ex) {
+            throw new java.io.UncheckedIOException(ex);
+        }
+    }
+
+    @Test
     void load_shouldUseExpectedBucketAndKey_whenFetchingS3() throws Exception {
         // Arrange
         byte[] tgz = BundleArchiveBuilder.tgzOf(readMvpSeed(), ENTRY_NAME);

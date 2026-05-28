@@ -7,6 +7,7 @@ import com.rapid7.integrationregistry.mapping.exception.BundleParseException;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
+import org.apache.commons.io.input.BoundedInputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.core.exception.SdkException;
@@ -16,6 +17,7 @@ import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -36,6 +38,11 @@ import java.util.Objects;
  * <p>The bundle artifact is a {@code .tgz} (gzipped tarball) with a single
  * entry named {@code vendor-mapping.yaml}; the YAML is then handed to the
  * parser. Multi-entry tarballs and non-standard entry names are rejected.
+ *
+ * <p>Two byte-budget caps defend against an outsized payload OOM-ing every
+ * replica at boot: a 50 MB compressed cap on the S3 fetch and a 200 MB
+ * inflated cap on the gzip stream (gzip-bomb defence). Both are hard rejects
+ * surfaced as {@code archiveExtractFailed}.
  */
 final class S3VendorMappingBundleLoader {
 
@@ -46,6 +53,27 @@ final class S3VendorMappingBundleLoader {
     private static final String FIELD_PROPERTIES = "properties";
     private static final String TEMP_PREFIX = "vendor-mapping-";
     private static final String TEMP_SUFFIX = ".tgz.partial";
+
+    /**
+     * Hard cap on the compressed bundle byte count fetched from S3. The current
+     * MVP-seed tarball is well under 10 KB; 50 MB is generous head-room for
+     * future fixture growth while still bounding boot-time memory if S3 returns
+     * an unexpectedly large payload.
+     */
+    private static final long MAX_BUNDLE_BYTES_COMPRESSED = 50L * 1024 * 1024;
+
+    /**
+     * Hard cap on the inflated tar bytes streamed through the gzip decoder.
+     * Defends against a gzip-bomb that compresses to within the compressed cap
+     * but expands to gigabytes of memory pressure during tar extraction.
+     *
+     * <p>Enforced via {@code BoundedInputStream}, whose default behaviour is to
+     * return EOF once {@code maxCount} is reached rather than throw. A truncated
+     * tar stream then surfaces as an {@code IOException} from the tar parser
+     * and is wrapped in {@code archiveExtractFailed}. Either way memory is
+     * bounded — the byte budget never exceeds 200 MB regardless of payload.
+     */
+    private static final long MAX_BUNDLE_BYTES_INFLATED = 200L * 1024 * 1024;
 
     private final S3Client s3Client;
     private final BundleParser parser;
@@ -86,7 +114,13 @@ final class S3VendorMappingBundleLoader {
                 .bucket(properties.s3Bucket())
                 .key(properties.bundleObjectKey())
                 .build();
-            return s3Client.getObject(request, ResponseTransformer.toBytes()).asByteArray();
+            byte[] bytes = s3Client.getObject(request, ResponseTransformer.toBytes()).asByteArray();
+            if (bytes.length > MAX_BUNDLE_BYTES_COMPRESSED) {
+                throw BundleLoadException.archiveExtractFailed(
+                    new IllegalStateException("Bundle exceeds compressed size cap: "
+                        + bytes.length + " > " + MAX_BUNDLE_BYTES_COMPRESSED + " bytes"));
+            }
+            return bytes;
         } catch (SdkException ex) {
             throw BundleLoadException.s3FetchFailed(ex);
         }
@@ -104,11 +138,42 @@ final class S3VendorMappingBundleLoader {
     }
 
     private VendorMappingSnapshot parseFromBytes(byte[] tgzBytes) throws BundleLoadException {
+        // Inflate the gzip member into memory under a hard byte cap before any
+        // tar parsing. Doing the gzip→bytes step separately (rather than
+        // streaming through TarArchiveInputStream) avoids the inflater-EOF race
+        // in commons-compress's GzipCompressorInputStream, where a follow-up
+        // read after the gzip trailer can NPE on an already-released Inflater.
+        // The cap also defends against a gzip-bomb that compresses to within
+        // the S3 fetch cap but expands to gigabytes of inflated tar content.
+        byte[] tarBytes = inflateBounded(tgzBytes);
+        try (ByteArrayInputStream tarByteIn = new ByteArrayInputStream(tarBytes);
+             TarArchiveInputStream tarIn = new TarArchiveInputStream(tarByteIn)) {
+            requireSingleNamedEntry(tarIn);
+            VendorMappingSnapshot snapshot = parseSnapshot(tarIn);
+            // The tarball must contain exactly one entry. The first entry has
+            // already been validated by requireSingleNamedEntry; reject any
+            // additional entries here so that multi-entry tarballs cannot slip
+            // through (which would contradict the class-level Javadoc and the
+            // method name "requireSingleNamedEntry").
+            if (tarIn.getNextEntry() != null) {
+                throw BundleLoadException.archiveExtractFailed(
+                    new IllegalStateException("tarball has more than one entry; expected exactly "
+                                              + BUNDLE_ENTRY_NAME));
+            }
+            return snapshot;
+        } catch (IOException ex) {
+            throw BundleLoadException.archiveExtractFailed(ex);
+        }
+    }
+
+    private static byte[] inflateBounded(byte[] tgzBytes) throws BundleLoadException {
         try (ByteArrayInputStream byteIn = new ByteArrayInputStream(tgzBytes);
              GzipCompressorInputStream gzipIn = new GzipCompressorInputStream(byteIn);
-             TarArchiveInputStream tarIn = new TarArchiveInputStream(gzipIn)) {
-            requireSingleNamedEntry(tarIn);
-            return parseSnapshot(tarIn);
+             InputStream boundedIn = BoundedInputStream.builder()
+                 .setInputStream(gzipIn)
+                 .setMaxCount(MAX_BUNDLE_BYTES_INFLATED)
+                 .get()) {
+            return boundedIn.readAllBytes();
         } catch (IOException ex) {
             throw BundleLoadException.archiveExtractFailed(ex);
         }

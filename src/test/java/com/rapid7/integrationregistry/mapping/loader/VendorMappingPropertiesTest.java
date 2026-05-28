@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
 class VendorMappingPropertiesTest {
@@ -75,7 +76,44 @@ class VendorMappingPropertiesTest {
     void properties_shouldThrowNpe_whenS3KeyPrefixNull() {
         // Arrange / Act / Assert
         assertThatNullPointerException()
-            .isThrownBy(() -> new VendorMappingProperties("v", "b", null, Path.of("/tmp")))
+            .isThrownBy(() -> new VendorMappingProperties("v1.0.0", "b", null, Path.of("/tmp")))
             .withMessage("s3KeyPrefix");
+    }
+
+    @Test
+    void properties_shouldThrowIllegalArgument_whenBundleVersionMissingVPrefix() {
+        // Arrange / Act / Assert — bare semver without the leading 'v' is rejected.
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> new VendorMappingProperties("1.0.0", "b", "p/", Path.of("/tmp")))
+            .withMessageContaining("bundleVersion must match vMAJOR.MINOR.PATCH")
+            .withMessageContaining("1.0.0");
+    }
+
+    @Test
+    void properties_shouldThrowIllegalArgument_whenBundleVersionMissingPatch() {
+        // Arrange / Act / Assert — only major.minor is rejected; PATCH is required.
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> new VendorMappingProperties("v1.0", "b", "p/", Path.of("/tmp")))
+            .withMessageContaining("bundleVersion must match vMAJOR.MINOR.PATCH");
+    }
+
+    @Test
+    void properties_shouldThrowIllegalArgument_whenBundleVersionContainsPathTraversal() {
+        // Arrange / Act / Assert — path-traversal residue must not pass through into
+        // either the cache filename or the S3 key.
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> new VendorMappingProperties(
+                "../../etc/passwd", "b", "p/", Path.of("/tmp")))
+            .withMessageContaining("bundleVersion must match vMAJOR.MINOR.PATCH");
+    }
+
+    @Test
+    void properties_shouldThrowIllegalArgument_whenS3KeyPrefixMissingTrailingSlash() {
+        // Arrange / Act / Assert
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> new VendorMappingProperties(
+                "v1.0.0", "b", "registry/mappings", Path.of("/tmp")))
+            .withMessageContaining("s3KeyPrefix must end with '/'")
+            .withMessageContaining("registry/mappings");
     }
 }

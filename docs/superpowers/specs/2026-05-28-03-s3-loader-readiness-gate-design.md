@@ -151,12 +151,13 @@ public class VendorMappingConfiguration {
 
     @Bean
     public VendorMappingSnapshotHolder vendorMappingSnapshotHolder() {
+        // Single bean — Spring resolves @Autowired VendorMappingSnapshot to
+        // this same instance via structural autowiring (the holder implements
+        // the interface). A separate VendorMappingSnapshot @Bean factory
+        // returning the same holder breaks holder autowiring with
+        // NoUniqueBeanDefinitionException because Spring tracks the runtime
+        // return type of factory methods, not the declared return type.
         return new VendorMappingSnapshotHolder();
-    }
-
-    @Bean
-    public VendorMappingSnapshot vendorMappingSnapshot(VendorMappingSnapshotHolder holder) {
-        return holder;   // single bean serves both interface types
     }
 
     @Bean
@@ -169,9 +170,15 @@ public class VendorMappingConfiguration {
     public BundleLoadListener bundleLoadListener(
             S3VendorMappingBundleLoader loader,
             VendorMappingSnapshotHolder holder,
-            VendorMappingProperties properties,
-            ApplicationEventPublisher events) {
-        return new BundleLoadListener(loader, holder, properties, events);
+            VendorMappingProperties properties) {
+        return new BundleLoadListener(loader, holder, properties);
+    }
+
+    @Bean
+    public BundleLoadHealthIndicator bundleLoadHealthIndicator(
+            VendorMappingSnapshotHolder holder,
+            VendorMappingProperties properties) {
+        return new BundleLoadHealthIndicator(holder, properties);
     }
 }
 ```
@@ -567,40 +574,42 @@ Registered in `LayerDependencyRulesTest` alongside the existing rules.
 ### Boot path — success (S3 fetch)
 
 ```
-Spring context refresh → beans created (S3Client, parser, holder, loader, listener)
-                       → framework auto-publishes ACCEPTING_TRAFFIC at ApplicationStartedEvent
+Spring context refresh → beans created (S3Client, parser, holder, loader, listener,
+                                          bundleLoadHealthIndicator)
 BundleLoadListener.onApplicationEvent(ApplicationStartedEvent):
-  [1] publish REFUSING_TRAFFIC                              ← override default
+  [1] holder.isLoaded()? no, proceed
   [2] loader.load():
         Files.exists(cacheFile)? no
         s3Client.getObject(GetObjectRequest{bucket, bundleObjectKey}) → bytes
+        size cap check (50 MB compressed)
         Files.createDirectories(cacheDir)
         Files.write(tempFile, bytes); Files.move(tempFile, cacheFile, ATOMIC_MOVE)
-        gunzip + untar bytes → tar entry "vendor-mapping.yaml"
+        gunzip (under 200 MB inflated cap) + untar bytes → tar entry "vendor-mapping.yaml"
+        require single-named-entry; require no further entries
         parser.parse(tarEntryStream) → VendorMappingSnapshot
   [3] holder.set(new LoggingVendorMappingSnapshot(snapshot))
-  [4] log INFO "Vendor mapping bundle loaded; mapping_version=v1.0.0"
-  [5] publish ACCEPTING_TRAFFIC
+  [4] log INFO "Vendor mapping bundle loaded; mapping_version=v1.0.0 bundle_version=v1.0.0"
 
-GET /actuator/health/readiness → UP
+GET /actuator/health/readiness → UP (bundleLoad component reports UP with
+                                     mapping_version + bundle_version details)
 ```
 
 ### Boot path — success (cache hit)
 
 ```
-[1] publish REFUSING_TRAFFIC
+[1] holder.isLoaded()? no, proceed
 [2] loader.load():
       Files.exists(cacheFile)? yes
       Files.readAllBytes(cacheFile) → bytes
-      gunzip + untar → parse → VendorMappingSnapshot
+      gunzip (under inflated cap) + untar → parse → VendorMappingSnapshot
       (S3Client.getObject is NEVER called)
-[3..5] success path continues
+[3..4] success path continues; health indicator now reports UP
 ```
 
 ### Boot path — corrupt cache → S3 fallthrough
 
 ```
-[1] publish REFUSING_TRAFFIC
+[1] holder.isLoaded()? no, proceed
 [2a] loader.load():
        Files.exists(cacheFile)? yes
        Files.readAllBytes(cacheFile) → bytes (truncated)
@@ -608,21 +617,24 @@ GET /actuator/health/readiness → UP
        loader catches, log.warn("disk cache corrupted ... falling through to S3"),
        Files.deleteIfExists(cacheFile), proceed
 [2b]   s3Client.getObject(...) → fresh bytes → write atomic cache → parse → snapshot
-[3..5] success path continues
+[3..4] success path continues; health indicator now reports UP
 ```
 
 ### Boot path — S3 failure
 
 ```
-[1] publish REFUSING_TRAFFIC
+[1] holder.isLoaded()? no, proceed
 [2] loader.load():
       no cache file
       s3Client.getObject(...) throws SdkClientException
       → BundleLoadException.s3FetchFailed(...)
 [catch] log.error structured fields:
         failure_class=BundleLoadException, bundle_version=v1.0.0,
-        cause="...", message="..."
-[return without setting holder, without publishing ACCEPTING_TRAFFIC]
+        s3_bucket=..., s3_key=..., cause="...", message="..."
+[return without setting holder]
+
+Holder stays empty; bundleLoad health indicator returns DOWN with
+{reason: "vendor mapping bundle not yet loaded", bundle_version}.
 
 GET /actuator/health/readiness → DOWN forever (replica out of rotation)
 GET /actuator/health/liveness  → UP (replica alive, not killed)
@@ -631,7 +643,7 @@ GET /actuator/health/liveness  → UP (replica alive, not killed)
 ### Boot path — invalid bundle from S3
 
 ```
-[1] publish REFUSING_TRAFFIC
+[1] holder.isLoaded()? no, proceed
 [2] loader.load():
       s3Client.getObject(...) → bytes (valid tgz, malformed YAML or schema-violating)
       gunzip + untar OK → parser.parse(...) throws BundleParseException
@@ -640,7 +652,7 @@ GET /actuator/health/liveness  → UP (replica alive, not killed)
         (since the cause exposes them via the payload-style accessor)
 [return without setting holder]
 
-readiness DOWN forever
+readiness DOWN forever (bundleLoad indicator reports DOWN)
 ```
 
 ### Lookup path — post-load
@@ -709,7 +721,8 @@ Test layering targets `~70%` unit / `~30%` Spring-context integration per `TESTI
 | `VendorMappingSnapshotHolderTest` | `lookup_shouldThrowIllegalState_whenNotYetSet`; `mappingVersion_shouldThrowIllegalState_whenNotYetSet`; `lookup_shouldDelegate_whenSet`; `mappingVersion_shouldDelegate_whenSet`; `set_shouldThrowIllegalState_whenAlreadySet`; `set_shouldThrowNpe_whenNullSnapshot`. |
 | `LoggingVendorMappingSnapshotTest` | `lookup_shouldLogWarn_whenUnderlyingReturnsUnknown` (Logback `ListAppender` captures the WARN; assert message contains `product`, `source_type`, `source_value`, `mapping_version`); `lookup_shouldNotLog_whenUnderlyingReturnsKnown`; `lookup_shouldDelegate_whenKnownTriplet`; `mappingVersion_shouldDelegate_always`. |
 | `S3VendorMappingBundleLoaderTest` | `load_shouldReadFromDisk_whenCacheExists` (uses `@TempDir` + `BundleArchiveBuilder`; verifies `S3Client.getObject(...)` is NOT called); `load_shouldFetchS3_whenCacheMissing`; `load_shouldFallthroughToS3_whenCacheCorrupted` (writes garbage bytes to TempDir; expects S3 call + cache replaced with valid tgz); `load_shouldThrowS3FetchFailed_whenS3Throws`; `load_shouldThrowArchiveExtractFailed_whenTarballEmpty`; `load_shouldThrowArchiveExtractFailed_whenEntryNameWrong`; `load_shouldThrowParseFailed_whenYamlInvalid`; `load_shouldThrowCacheReadFailed_whenIoErrorOnRead`. |
-| `BundleLoadListenerTest` | `onApplicationEvent_shouldPublishRefusing_thenAccepting_whenLoadSucceeds` (Mockito `InOrder` verifies event order); `onApplicationEvent_shouldPublishRefusing_only_whenLoadFails`; `onApplicationEvent_shouldPopulateHolder_whenLoadSucceeds`; `onApplicationEvent_shouldNotPopulateHolder_whenLoadFails`; `onApplicationEvent_shouldLogStructuredError_whenLoadFails` (assert ERROR log entry contains `failure_class`, `bundle_version`, `s3_bucket`, `s3_key`). Collaborators (`S3VendorMappingBundleLoader`, `VendorMappingSnapshotHolder`, `ApplicationEventPublisher`) are Mockito mocks; `VendorMappingProperties` is a real record with test-fixture values. |
+| `BundleLoadListenerTest` | `onApplicationEvent_shouldPopulateHolder_whenLoadSucceeds`; `onApplicationEvent_shouldNotPopulateHolder_whenLoadFails`; `onApplicationEvent_shouldLogStructuredError_whenLoadFails` (asserts ERROR log entry contains `failure_class`, `bundle_version`, `s3_bucket`, `s3_key`); `onApplicationEvent_shouldLogInfo_whenLoadSucceeds`; `onApplicationEvent_shouldAbsorbRuntimeException_whenLoaderThrowsUnchecked` (an unchecked load failure must not propagate out of `onApplicationEvent`); `onApplicationEvent_shouldSkipLoad_whenHolderAlreadyLoaded`. Collaborators (`S3VendorMappingBundleLoader`, `VendorMappingSnapshotHolder`) are Mockito mocks; `VendorMappingProperties` is a real record with test-fixture values. The listener constructor takes only `(loader, holder, properties)` — no event publisher dependency. |
+| `BundleLoadHealthIndicatorTest` | `health_shouldReturnDown_whenHolderEmpty` (DOWN with `bundle_version` + `reason: "vendor mapping bundle not yet loaded"`, no `mapping_version`); `health_shouldReturnUp_whenHolderLoaded` (UP with `mapping_version` + `bundle_version`); `health_shouldSurfaceLoadedMappingVersion_whenDifferentFromConfigured` (the loaded snapshot's `mappingVersion()` is independent of the deploy-pinned `bundle_version`; both surface separately in `details`). |
 
 ### Exception test under `src/test/java/com/rapid7/integrationregistry/mapping/exception/`
 
@@ -721,8 +734,9 @@ Test layering targets `~70%` unit / `~30%` Spring-context integration per `TESTI
 
 | File | Tests |
 |------|-------|
-| `VendorMappingBootIntegrationTest` | `@SpringBootTest` + `@MockitoBean S3Client` + `@TempDir` cache directory + `@DynamicPropertySource` to register `integration-registry.vendor-mapping.bundle-version=v1.0.0`, `s3-bucket=test-bucket`, `s3-key-prefix=test/mappings/`, `cache-dir=<tempDirPath>` before context starts. Three `@Nested` classes: `WhenS3ReturnsValidBundle` — stub `getObject(...)` to return MVP-seed-as-tgz bytes built by `BundleArchiveBuilder.tgzOf(mvpSeedYamlBytes, "vendor-mapping.yaml")`; assert `availability.getReadinessState() == ACCEPTING_TRAFFIC` and that the `VendorMappingSnapshot` bean resolves all 4 MVP triplets. `WhenS3Throws` — stub to throw `SdkClientException`; assert `getReadinessState() == REFUSING_TRAFFIC`; assert `getLivenessState() == CORRECT`. `WhenS3ReturnsInvalidBundle` — stub to return malformed YAML wrapped in tgz; assert `getReadinessState() == REFUSING_TRAFFIC` and ERROR log captured with validation messages. |
-| `VendorMappingDiskCacheIntegrationTest` | `@SpringBootTest` + `@MockitoBean S3Client` + `@TempDir` cache directory + `@DynamicPropertySource` registering the cache-dir to the temp path. Pre-seeds `<tempDir>/vendor-mapping-v1.0.0.tgz` with valid MVP-seed-tgz bytes BEFORE context starts (in a `@BeforeAll` static helper that runs before Spring's context bootstrap). After context refresh and `ApplicationStartedEvent`, asserts: (a) `availability.getReadinessState() == ACCEPTING_TRAFFIC`, (b) `verify(s3Client, never()).getObject(any(GetObjectRequest.class), any(ResponseTransformer.class))`. |
+| `VendorMappingBootIntegrationTest` | `@SpringBootTest` + `@MockitoBean S3Client` + `@TempDir` cache directory + `@DynamicPropertySource` to register `integration-registry.vendor-mapping.bundle-version=v1.0.0`, `s3-bucket=test-bucket`, `s3-key-prefix=registry/mappings/`, `cache-dir=<tempDirPath>` before context starts. An outer-class `@BeforeEach` deletes any leftover cache file so each nested scenario starts cold. Three `@Nested` classes: `WhenS3ReturnsValidBundle` — stub `getObject(...)` to return MVP-seed-as-tgz bytes built by `BundleArchiveBuilder.tgzOf(mvpSeedYamlBytes, "vendor-mapping.yaml")`; assert `healthIndicator.health().getStatus() == Status.UP` with `mapping_version` + `bundle_version` details and that the `VendorMappingSnapshot` bean resolves all 4 MVP triplets. `WhenS3Throws` — stub to throw `SdkClientException`; assert `healthIndicator.health().getStatus() == Status.DOWN` with `reason` + `bundle_version` details; assert structured ERROR log captured. `WhenS3ReturnsInvalidBundle` — stub to return malformed YAML wrapped in tgz; assert `healthIndicator.health().getStatus() == Status.DOWN` and ERROR log captured with parse-failure context. |
+| `VendorMappingDiskCacheIntegrationTest` | `@SpringBootTest` + `@MockitoBean S3Client` + `@TempDir` cache directory + `@DynamicPropertySource` registering the cache-dir to the temp path. Pre-seeds `<tempDir>/vendor-mapping-v1.0.0.tgz` with valid MVP-seed-tgz bytes BEFORE context starts (in a `@BeforeAll` static helper that runs before Spring's context bootstrap). After context refresh and `ApplicationStartedEvent`, asserts: (a) `healthIndicator.health().getStatus() == Status.UP`, (b) `verify(s3Client, never()).getObject(any(GetObjectRequest.class), any(ResponseTransformer.class))`. |
+| `VendorMappingReadinessProbeIntegrationTest` | `@SpringBootTest(webEnvironment = RANDOM_PORT)` + `@MockitoBean S3Client` + pre-seeded cache (same shape as `VendorMappingDiskCacheIntegrationTest`). Hits `GET /actuator/health/readiness` over HTTP via `RestClient` and asserts that the response JSON's `components` map contains a `bundleLoad` key. Pins the contract that Spring's `HealthContributorNameGenerator` strips the `HealthIndicator` suffix from the bean name (`bundleLoadHealthIndicator` → `bundleLoad`); a regression in that rule would silently fail open in production. |
 
 The MVP-seed YAML bytes for these tests come from the existing `src/main/resources/vendor-mapping/bundle/mvp-seed.yaml` resource (read via `getResourceAsStream`). Each integration test rebuilds the `.tgz` bytes in-memory via `BundleArchiveBuilder` rather than committing a binary fixture.
 
@@ -747,7 +761,7 @@ These are explicit non-goals so the scope cut is unambiguous for the implementer
 - **Aggregator / controller wiring** that consumes the snapshot (T08, T09).
 - **Surfacing across read routes** (the synthetic-vendor row, etc.) — T08 / T09 own response shapes.
 - **Bundle JSON Schema CI rules beyond loader self-validation** — T11 owns CI's full validation suite (uniqueness, immutability, deprecation safety, PR template).
-- **`RestTestClient` for HTTP-layer readiness assertions** — TESTING.md notes this lands in T07; this plan asserts via `ApplicationAvailability` directly.
+- **`RestTestClient` for HTTP-layer readiness assertions** — TESTING.md notes this lands in T07; this plan asserts via the `BundleLoadHealthIndicator` bean directly for the per-scenario behaviour tests, and uses Spring's `RestClient` (no extra dependency) for the single HTTP-level component-name regression test.
 
 ## References
 
