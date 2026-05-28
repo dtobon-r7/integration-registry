@@ -1,8 +1,6 @@
 package com.rapid7.integrationregistry.mapping.exception;
 
-import com.rapid7.integrationregistry.adapter.exception.AdapterAuthException;
-import com.rapid7.integrationregistry.adapter.exception.AdapterTimeoutException;
-import com.rapid7.integrationregistry.adapter.exception.AdapterUpstreamException;
+import com.rapid7.integrationregistry.adapter.exception.AdapterException;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -129,26 +127,26 @@ class BundleLoadExceptionTest {
         // Arrange / Act
         int modifiers = BundleLoadException.class.getModifiers();
 
-        // Assert — ADR-001: exception classes are "not final" so future
-        // refactors can subclass without a breaking change.
+        // Assert — ADR-001 shared invariant: exception classes are not final
+        // so future refactors can subclass without a breaking change.
         assertThat(Modifier.isFinal(modifiers)).isFalse();
     }
 
     @Test
-    void independentlyCatchable_shouldNotShareParentWithOtherExceptions_whenThrown() {
+    void independentlyCatchable_shouldNotBeAdapterExceptionOrSibling_whenThrown() {
         // Arrange
-        // If a future refactor introduces a shared parent above Exception
-        // (e.g., a "RegistryException" abstract class) for either family,
-        // these isNotInstanceOf assertions will fail. The two exception
-        // families (mapping.exception.* and adapter.exception.*) are
-        // deliberately independent — see ADR-001.
+        // ADR-001 family-independence rule: the bundle family and the adapter
+        // family are mutually independent. A BundleLoadException is not
+        // assignable to AdapterException (the adapter family parent) — so a
+        // catch (AdapterException) clause never picks up a bundle exception.
+        // Sibling distinctness within the bundle family is also asserted:
+        // BundleLoadException and BundleParseException are not assignable to
+        // each other.
 
         // Act / Assert
         BundleLoadException caught = BundleLoadException.s3FetchFailed(new IOException("test"));
         assertThat(caught)
-            .isNotInstanceOf(AdapterAuthException.class)
-            .isNotInstanceOf(AdapterTimeoutException.class)
-            .isNotInstanceOf(AdapterUpstreamException.class)
+            .isNotInstanceOf(AdapterException.class)
             .isNotInstanceOf(BundleParseException.class);
     }
 }
