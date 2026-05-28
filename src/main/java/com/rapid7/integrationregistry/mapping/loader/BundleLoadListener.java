@@ -64,16 +64,11 @@ final class BundleLoadListener implements ApplicationListener<ApplicationStarted
     // refresh. That would defeat the readiness gate by forcing the replica
     // into a hard-failed state instead of a held-out-of-rotation state. The
     // catch is narrow (a single try block guarding loader.load()) and Error
-    // is deliberately allowed to propagate. PMD's AvoidCatchingGenericException
-    // does not have visibility into this contract, so we suppress locally.
+    // is deliberately allowed to propagate.
     @SuppressWarnings("PMD.AvoidCatchingGenericException")
     @Override
     public void onApplicationEvent(ApplicationStartedEvent event) {
         if (holder.isLoaded()) {
-            // Defensive: the listener should fire once per context. If it fires
-            // again (e.g., a test re-publishing the event), skip — the holder
-            // is one-shot and a second set() would throw. DEBUG-log so the
-            // re-fire is observable in operational logs rather than silent.
             log.debug("Vendor mapping bundle already loaded; skipping load on repeat event");
             return;
         }

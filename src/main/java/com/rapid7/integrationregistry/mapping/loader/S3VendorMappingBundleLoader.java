@@ -138,23 +138,16 @@ final class S3VendorMappingBundleLoader {
     }
 
     private VendorMappingSnapshot parseFromBytes(byte[] tgzBytes) throws BundleLoadException {
-        // Inflate the gzip member into memory under a hard byte cap before any
-        // tar parsing. Doing the gzip→bytes step separately (rather than
-        // streaming through TarArchiveInputStream) avoids the inflater-EOF race
-        // in commons-compress's GzipCompressorInputStream, where a follow-up
-        // read after the gzip trailer can NPE on an already-released Inflater.
-        // The cap also defends against a gzip-bomb that compresses to within
-        // the S3 fetch cap but expands to gigabytes of inflated tar content.
+        // Inflate the gzip member into memory before any tar parsing. The
+        // separate gzip→bytes step (rather than streaming through
+        // TarArchiveInputStream) avoids the inflater-EOF race in commons-compress's
+        // GzipCompressorInputStream, where a follow-up read after the gzip trailer
+        // can NPE on an already-released Inflater.
         byte[] tarBytes = inflateBounded(tgzBytes);
         try (ByteArrayInputStream tarByteIn = new ByteArrayInputStream(tarBytes);
              TarArchiveInputStream tarIn = new TarArchiveInputStream(tarByteIn)) {
             requireSingleNamedEntry(tarIn);
             VendorMappingSnapshot snapshot = parseSnapshot(tarIn);
-            // The tarball must contain exactly one entry. The first entry has
-            // already been validated by requireSingleNamedEntry; reject any
-            // additional entries here so that multi-entry tarballs cannot slip
-            // through (which would contradict the class-level Javadoc and the
-            // method name "requireSingleNamedEntry").
             if (tarIn.getNextEntry() != null) {
                 throw BundleLoadException.archiveExtractFailed(
                     new IllegalStateException("tarball has more than one entry; expected exactly "

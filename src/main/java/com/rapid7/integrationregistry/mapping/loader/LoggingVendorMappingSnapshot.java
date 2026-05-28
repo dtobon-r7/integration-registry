@@ -27,10 +27,16 @@ final class LoggingVendorMappingSnapshot implements VendorMappingSnapshot {
         this.delegate = Objects.requireNonNull(delegate, FIELD_DELEGATE);
     }
 
+    // Identity check on VendorResolution.unknown(): the snapshot returns the
+    // unknown() singleton for unmapped triplets, so reference equality is
+    // sufficient and avoids a 5-field record-equals on the per-request hot path.
+    // PMD's CompareObjectsWithEquals can't see the singleton invariant, so we
+    // suppress locally.
+    @SuppressWarnings("PMD.CompareObjectsWithEquals")
     @Override
     public VendorResolution lookup(ProductName productName, SourceType sourceType, String sourceValue) {
         VendorResolution resolution = delegate.lookup(productName, sourceType, sourceValue);
-        if (VendorResolution.unknown().equals(resolution)) {
+        if (resolution == VendorResolution.unknown()) {
             log.warn("Unknown vendor mapping triplet: product={}, source_type={}, source_value={} (mapping_version={})",
                      productName, sourceType, sourceValue, delegate.mappingVersion());
         }

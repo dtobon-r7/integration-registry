@@ -3,8 +3,8 @@ package com.rapid7.integrationregistry.mapping.loader;
 import com.rapid7.integrationregistry.mapping.ProductName;
 import com.rapid7.integrationregistry.mapping.SourceType;
 import com.rapid7.integrationregistry.mapping.VendorCategory;
-import com.rapid7.integrationregistry.mapping.VendorMappingSnapshot;
 import com.rapid7.integrationregistry.mapping.VendorResolution;
+import com.rapid7.integrationregistry.testsupport.StubVendorMappingSnapshot;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -12,19 +12,6 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
 class VendorMappingSnapshotHolderTest {
-
-    private static VendorMappingSnapshot stubSnapshot(String version, VendorResolution resolution) {
-        return new VendorMappingSnapshot() {
-            @Override
-            public VendorResolution lookup(ProductName p, SourceType s, String v) {
-                return resolution;
-            }
-            @Override
-            public String mappingVersion() {
-                return version;
-            }
-        };
-    }
 
     @Test
     void lookup_shouldThrowIllegalState_whenNotYetSet() {
@@ -56,7 +43,7 @@ class VendorMappingSnapshotHolderTest {
         VendorResolution expected = new VendorResolution(
             "microsoft-defender", "Microsoft Defender",
             VendorCategory.EDR, "microsoft", "Microsoft");
-        holder.set(stubSnapshot("v1.0.0", expected));
+        holder.set(StubVendorMappingSnapshot.returning("v1.0.0", expected));
 
         // Act
         VendorResolution actual = holder.lookup(
@@ -70,7 +57,7 @@ class VendorMappingSnapshotHolderTest {
     void mappingVersion_shouldDelegate_whenSet() {
         // Arrange
         VendorMappingSnapshotHolder holder = new VendorMappingSnapshotHolder();
-        holder.set(stubSnapshot("v9.9.9", VendorResolution.unknown()));
+        holder.set(StubVendorMappingSnapshot.returning("v9.9.9", VendorResolution.unknown()));
 
         // Act
         String version = holder.mappingVersion();
@@ -83,11 +70,11 @@ class VendorMappingSnapshotHolderTest {
     void set_shouldThrowIllegalState_whenAlreadySet() {
         // Arrange
         VendorMappingSnapshotHolder holder = new VendorMappingSnapshotHolder();
-        holder.set(stubSnapshot("v1.0.0", VendorResolution.unknown()));
+        holder.set(StubVendorMappingSnapshot.returning("v1.0.0", VendorResolution.unknown()));
 
         // Act / Assert
         assertThatExceptionOfType(IllegalStateException.class)
-            .isThrownBy(() -> holder.set(stubSnapshot("v2.0.0", VendorResolution.unknown())))
+            .isThrownBy(() -> holder.set(StubVendorMappingSnapshot.returning("v2.0.0", VendorResolution.unknown())))
             .withMessageContaining("already set");
     }
 
@@ -115,7 +102,7 @@ class VendorMappingSnapshotHolderTest {
     void isLoaded_shouldReturnTrue_whenSet() {
         // Arrange
         VendorMappingSnapshotHolder holder = new VendorMappingSnapshotHolder();
-        holder.set(stubSnapshot("v1.0.0", VendorResolution.unknown()));
+        holder.set(StubVendorMappingSnapshot.returning("v1.0.0", VendorResolution.unknown()));
 
         // Act / Assert
         assertThat(holder.isLoaded()).isTrue();

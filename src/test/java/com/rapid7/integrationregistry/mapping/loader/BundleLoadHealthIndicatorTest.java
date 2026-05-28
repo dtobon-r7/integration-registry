@@ -1,9 +1,6 @@
 package com.rapid7.integrationregistry.mapping.loader;
 
-import com.rapid7.integrationregistry.mapping.ProductName;
-import com.rapid7.integrationregistry.mapping.SourceType;
-import com.rapid7.integrationregistry.mapping.VendorMappingSnapshot;
-import com.rapid7.integrationregistry.mapping.VendorResolution;
+import com.rapid7.integrationregistry.testsupport.StubVendorMappingSnapshot;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.health.contributor.Health;
@@ -26,19 +23,6 @@ class BundleLoadHealthIndicatorTest {
         indicator = new BundleLoadHealthIndicator(holder, properties);
     }
 
-    private static VendorMappingSnapshot stubSnapshot(String version) {
-        return new VendorMappingSnapshot() {
-            @Override
-            public VendorResolution lookup(ProductName p, SourceType s, String v) {
-                return VendorResolution.unknown();
-            }
-            @Override
-            public String mappingVersion() {
-                return version;
-            }
-        };
-    }
-
     @Test
     void health_shouldReturnDown_whenHolderEmpty() {
         // Arrange — holder is empty by default
@@ -57,7 +41,7 @@ class BundleLoadHealthIndicatorTest {
     @Test
     void health_shouldReturnUp_whenHolderLoaded() {
         // Arrange
-        holder.set(stubSnapshot("v1.0.0"));
+        holder.set(StubVendorMappingSnapshot.returningUnknown("v1.0.0"));
 
         // Act
         Health health = indicator.health();
@@ -75,7 +59,7 @@ class BundleLoadHealthIndicatorTest {
         // Arrange — loaded version may differ from configured bundle_version
         // (e.g., the bundle's metadata.mapping_version is independent of the
         // pinned artifact version). Both should appear separately in details.
-        holder.set(stubSnapshot("v2.5.0"));
+        holder.set(StubVendorMappingSnapshot.returningUnknown("v2.5.0"));
 
         // Act
         Health health = indicator.health();

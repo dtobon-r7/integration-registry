@@ -4,11 +4,9 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import com.rapid7.integrationregistry.mapping.ProductName;
-import com.rapid7.integrationregistry.mapping.SourceType;
 import com.rapid7.integrationregistry.mapping.VendorMappingSnapshot;
-import com.rapid7.integrationregistry.mapping.VendorResolution;
 import com.rapid7.integrationregistry.mapping.exception.BundleLoadException;
+import com.rapid7.integrationregistry.testsupport.StubVendorMappingSnapshot;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -54,23 +52,10 @@ class BundleLoadListenerTest {
         logger.detachAppender(appender);
     }
 
-    private static VendorMappingSnapshot stubSnapshot(String version) {
-        return new VendorMappingSnapshot() {
-            @Override
-            public VendorResolution lookup(ProductName p, SourceType s, String v) {
-                return VendorResolution.unknown();
-            }
-            @Override
-            public String mappingVersion() {
-                return version;
-            }
-        };
-    }
-
     @Test
     void onApplicationEvent_shouldPopulateHolder_whenLoadSucceeds() throws Exception {
         // Arrange
-        VendorMappingSnapshot loaded = stubSnapshot("v1.0.0");
+        VendorMappingSnapshot loaded = StubVendorMappingSnapshot.returningUnknown("v1.0.0");
         when(loader.load()).thenReturn(loaded);
 
         // Act
@@ -123,7 +108,7 @@ class BundleLoadListenerTest {
     @Test
     void onApplicationEvent_shouldLogInfo_whenLoadSucceeds() throws Exception {
         // Arrange
-        when(loader.load()).thenReturn(stubSnapshot("v1.0.0"));
+        when(loader.load()).thenReturn(StubVendorMappingSnapshot.returningUnknown("v1.0.0"));
 
         // Act
         listener.onApplicationEvent(mock(ApplicationStartedEvent.class));

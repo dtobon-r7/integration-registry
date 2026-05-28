@@ -6,18 +6,23 @@ import com.rapid7.integrationregistry.mapping.SourceType;
 import com.rapid7.integrationregistry.mapping.VendorMappingSnapshot;
 import com.rapid7.integrationregistry.mapping.exception.BundleLoadException;
 import com.rapid7.integrationregistry.testsupport.BundleArchiveBuilder;
+import com.rapid7.integrationregistry.testsupport.S3TestFixtures;
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
+import org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import software.amazon.awssdk.core.ResponseBytes;
+import org.mockito.ArgumentCaptor;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.sync.ResponseTransformer;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
-import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -62,10 +67,6 @@ class S3VendorMappingBundleLoaderTest {
         }
     }
 
-    private static ResponseBytes<GetObjectResponse> responseBytesOf(byte[] body) {
-        return ResponseBytes.fromByteArray(GetObjectResponse.builder().build(), body);
-    }
-
     @Test
     void load_shouldReadFromDisk_whenCacheExists() throws Exception {
         // Arrange
@@ -90,7 +91,7 @@ class S3VendorMappingBundleLoaderTest {
         // Arrange
         byte[] tgz = BundleArchiveBuilder.tgzOf(readMvpSeed(), ENTRY_NAME);
         when(s3Client.getObject(any(GetObjectRequest.class), any(ResponseTransformer.class)))
-            .thenReturn(responseBytesOf(tgz));
+            .thenReturn(S3TestFixtures.responseBytesOf(tgz));
 
         // Act
         VendorMappingSnapshot snapshot = loader.load();
@@ -111,7 +112,7 @@ class S3VendorMappingBundleLoaderTest {
 
         byte[] freshTgz = BundleArchiveBuilder.tgzOf(readMvpSeed(), ENTRY_NAME);
         when(s3Client.getObject(any(GetObjectRequest.class), any(ResponseTransformer.class)))
-            .thenReturn(responseBytesOf(freshTgz));
+            .thenReturn(S3TestFixtures.responseBytesOf(freshTgz));
 
         // Act
         VendorMappingSnapshot snapshot = loader.load();
@@ -144,7 +145,7 @@ class S3VendorMappingBundleLoaderTest {
         // Arrange — gzip a tar with zero entries.
         byte[] handBuiltEmptyTgz = handBuildEmptyTgz();
         when(s3Client.getObject(any(GetObjectRequest.class), any(ResponseTransformer.class)))
-            .thenReturn(responseBytesOf(handBuiltEmptyTgz));
+            .thenReturn(S3TestFixtures.responseBytesOf(handBuiltEmptyTgz));
 
         // Act / Assert
         BundleLoadException thrown = assertThatExceptionOfType(BundleLoadException.class)
@@ -156,17 +157,15 @@ class S3VendorMappingBundleLoaderTest {
     }
 
     private static byte[] handBuildEmptyTgz() {
-        try (java.io.ByteArrayOutputStream byteOut = new java.io.ByteArrayOutputStream();
-             org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream gzipOut =
-                 new org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream(byteOut);
-             org.apache.commons.compress.archivers.tar.TarArchiveOutputStream tarOut =
-                 new org.apache.commons.compress.archivers.tar.TarArchiveOutputStream(gzipOut)) {
+        try (ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+             GzipCompressorOutputStream gzipOut = new GzipCompressorOutputStream(byteOut);
+             TarArchiveOutputStream tarOut = new TarArchiveOutputStream(gzipOut)) {
             tarOut.finish();
             tarOut.close();
             gzipOut.close();
             return byteOut.toByteArray();
         } catch (IOException ex) {
-            throw new java.io.UncheckedIOException(ex);
+            throw new UncheckedIOException(ex);
         }
     }
 
@@ -175,7 +174,7 @@ class S3VendorMappingBundleLoaderTest {
         // Arrange — tarball with a single entry named "wrong-name.yaml"
         byte[] tgz = BundleArchiveBuilder.tgzOf(readMvpSeed(), "wrong-name.yaml");
         when(s3Client.getObject(any(GetObjectRequest.class), any(ResponseTransformer.class)))
-            .thenReturn(responseBytesOf(tgz));
+            .thenReturn(S3TestFixtures.responseBytesOf(tgz));
 
         // Act / Assert
         BundleLoadException thrown = assertThatExceptionOfType(BundleLoadException.class)
@@ -213,7 +212,7 @@ class S3VendorMappingBundleLoaderTest {
             """;
         byte[] tgz = BundleArchiveBuilder.tgzOf(invalidYaml.getBytes(StandardCharsets.UTF_8), ENTRY_NAME);
         when(s3Client.getObject(any(GetObjectRequest.class), any(ResponseTransformer.class)))
-            .thenReturn(responseBytesOf(tgz));
+            .thenReturn(S3TestFixtures.responseBytesOf(tgz));
 
         // Act / Assert
         BundleLoadException thrown = assertThatExceptionOfType(BundleLoadException.class)
@@ -246,7 +245,7 @@ class S3VendorMappingBundleLoaderTest {
         // be a valid tgz because the size check fires before any unzip work.
         byte[] oversized = new byte[(int) (50L * 1024 * 1024) + 1];
         when(s3Client.getObject(any(GetObjectRequest.class), any(ResponseTransformer.class)))
-            .thenReturn(responseBytesOf(oversized));
+            .thenReturn(S3TestFixtures.responseBytesOf(oversized));
 
         // Act / Assert
         BundleLoadException thrown = assertThatExceptionOfType(BundleLoadException.class)
@@ -260,12 +259,12 @@ class S3VendorMappingBundleLoaderTest {
     @Test
     void load_shouldThrowArchiveExtractFailed_whenTarballHasMultipleEntries() throws Exception {
         // Arrange — first entry is the canonical "vendor-mapping.yaml" with valid content,
-        // but a second entry follows; the new guard must reject this even though entry #1
+        // but a second entry follows; reject multi-entry tarballs even when entry #1
         // would parse successfully.
         byte[] mvpBytes = readMvpSeed();
         byte[] tgz = buildMultiEntryTgz(mvpBytes);
         when(s3Client.getObject(any(GetObjectRequest.class), any(ResponseTransformer.class)))
-            .thenReturn(responseBytesOf(tgz));
+            .thenReturn(S3TestFixtures.responseBytesOf(tgz));
 
         // Act / Assert
         BundleLoadException thrown = assertThatExceptionOfType(BundleLoadException.class)
@@ -277,21 +276,17 @@ class S3VendorMappingBundleLoaderTest {
     }
 
     private static byte[] buildMultiEntryTgz(byte[] firstEntryContent) {
-        try (java.io.ByteArrayOutputStream byteOut = new java.io.ByteArrayOutputStream();
-             org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream gzipOut =
-                 new org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream(byteOut);
-             org.apache.commons.compress.archivers.tar.TarArchiveOutputStream tarOut =
-                 new org.apache.commons.compress.archivers.tar.TarArchiveOutputStream(gzipOut)) {
-            org.apache.commons.compress.archivers.tar.TarArchiveEntry first =
-                new org.apache.commons.compress.archivers.tar.TarArchiveEntry(ENTRY_NAME);
+        try (ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+             GzipCompressorOutputStream gzipOut = new GzipCompressorOutputStream(byteOut);
+             TarArchiveOutputStream tarOut = new TarArchiveOutputStream(gzipOut)) {
+            TarArchiveEntry first = new TarArchiveEntry(ENTRY_NAME);
             first.setSize(firstEntryContent.length);
             tarOut.putArchiveEntry(first);
             tarOut.write(firstEntryContent);
             tarOut.closeArchiveEntry();
 
             byte[] extraContent = "extra".getBytes(StandardCharsets.UTF_8);
-            org.apache.commons.compress.archivers.tar.TarArchiveEntry second =
-                new org.apache.commons.compress.archivers.tar.TarArchiveEntry("extra-file.txt");
+            TarArchiveEntry second = new TarArchiveEntry("extra-file.txt");
             second.setSize(extraContent.length);
             tarOut.putArchiveEntry(second);
             tarOut.write(extraContent);
@@ -302,7 +297,7 @@ class S3VendorMappingBundleLoaderTest {
             gzipOut.close();
             return byteOut.toByteArray();
         } catch (IOException ex) {
-            throw new java.io.UncheckedIOException(ex);
+            throw new UncheckedIOException(ex);
         }
     }
 
@@ -311,9 +306,8 @@ class S3VendorMappingBundleLoaderTest {
         // Arrange
         byte[] tgz = BundleArchiveBuilder.tgzOf(readMvpSeed(), ENTRY_NAME);
         when(s3Client.getObject(any(GetObjectRequest.class), any(ResponseTransformer.class)))
-            .thenReturn(responseBytesOf(tgz));
-        org.mockito.ArgumentCaptor<GetObjectRequest> reqCaptor =
-            org.mockito.ArgumentCaptor.forClass(GetObjectRequest.class);
+            .thenReturn(S3TestFixtures.responseBytesOf(tgz));
+        ArgumentCaptor<GetObjectRequest> reqCaptor = ArgumentCaptor.forClass(GetObjectRequest.class);
 
         // Act
         loader.load();

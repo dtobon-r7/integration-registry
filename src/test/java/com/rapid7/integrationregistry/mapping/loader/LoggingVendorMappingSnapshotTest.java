@@ -7,8 +7,8 @@ import ch.qos.logback.core.read.ListAppender;
 import com.rapid7.integrationregistry.mapping.ProductName;
 import com.rapid7.integrationregistry.mapping.SourceType;
 import com.rapid7.integrationregistry.mapping.VendorCategory;
-import com.rapid7.integrationregistry.mapping.VendorMappingSnapshot;
 import com.rapid7.integrationregistry.mapping.VendorResolution;
+import com.rapid7.integrationregistry.testsupport.StubVendorMappingSnapshot;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,19 +35,6 @@ class LoggingVendorMappingSnapshotTest {
         logger.detachAppender(appender);
     }
 
-    private static VendorMappingSnapshot stubSnapshot(String version, VendorResolution resolution) {
-        return new VendorMappingSnapshot() {
-            @Override
-            public VendorResolution lookup(ProductName p, SourceType s, String v) {
-                return resolution;
-            }
-            @Override
-            public String mappingVersion() {
-                return version;
-            }
-        };
-    }
-
     @Test
     void constructor_shouldThrowNpe_whenDelegateNull() {
         // Arrange / Act / Assert
@@ -60,7 +47,7 @@ class LoggingVendorMappingSnapshotTest {
     void lookup_shouldLogWarn_whenUnderlyingReturnsUnknown() {
         // Arrange
         LoggingVendorMappingSnapshot decorator = new LoggingVendorMappingSnapshot(
-            stubSnapshot("v1.0.0", VendorResolution.unknown()));
+            StubVendorMappingSnapshot.returning("v1.0.0", VendorResolution.unknown()));
 
         // Act
         VendorResolution result = decorator.lookup(
@@ -87,7 +74,7 @@ class LoggingVendorMappingSnapshotTest {
             "microsoft-defender", "Microsoft Defender",
             VendorCategory.EDR, "microsoft", "Microsoft");
         LoggingVendorMappingSnapshot decorator = new LoggingVendorMappingSnapshot(
-            stubSnapshot("v1.0.0", known));
+            StubVendorMappingSnapshot.returning("v1.0.0", known));
 
         // Act
         VendorResolution result = decorator.lookup(
@@ -102,7 +89,7 @@ class LoggingVendorMappingSnapshotTest {
     void mappingVersion_shouldDelegate_always() {
         // Arrange
         LoggingVendorMappingSnapshot decorator = new LoggingVendorMappingSnapshot(
-            stubSnapshot("v1.42.0", VendorResolution.unknown()));
+            StubVendorMappingSnapshot.returning("v1.42.0", VendorResolution.unknown()));
 
         // Act
         String version = decorator.mappingVersion();

@@ -10,6 +10,7 @@ import com.rapid7.integrationregistry.mapping.VendorCategory;
 import com.rapid7.integrationregistry.mapping.VendorMappingSnapshot;
 import com.rapid7.integrationregistry.mapping.VendorResolution;
 import com.rapid7.integrationregistry.testsupport.BundleArchiveBuilder;
+import com.rapid7.integrationregistry.testsupport.S3TestFixtures;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,12 +28,10 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import software.amazon.awssdk.core.ResponseBytes;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.sync.ResponseTransformer;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
-import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -112,16 +111,40 @@ class VendorMappingBootIntegrationTest {
         Files.deleteIfExists(cacheFile);
     }
 
-    private static ResponseBytes<GetObjectResponse> responseBytesOf(byte[] body) {
-        return ResponseBytes.fromByteArray(GetObjectResponse.builder().build(), body);
-    }
-
     private static ApplicationStartedEvent dummyStartedEvent() {
         return new ApplicationStartedEvent(
             new SpringApplication(),
             new String[]{},
             null,
             Duration.ZERO);
+    }
+
+    /**
+     * Captures Logback events from a target logger. Caller invokes
+     * {@link #detach()} in {@code @AfterEach}. Used by the failure-path
+     * scenarios below to assert ERROR log content.
+     */
+    static final class LogCapture {
+        final Logger logger;
+        final ListAppender<ILoggingEvent> appender;
+
+        LogCapture(Class<?> loggerClass) {
+            this.logger = (Logger) LoggerFactory.getLogger(loggerClass);
+            this.appender = new ListAppender<>();
+            this.appender.start();
+            this.logger.addAppender(this.appender);
+        }
+
+        void detach() {
+            logger.detachAppender(appender);
+        }
+
+        ILoggingEvent firstError() {
+            return appender.list.stream()
+                .filter(e -> e.getLevel() == Level.ERROR)
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("expected ERROR log event"));
+        }
     }
 
     /**
@@ -141,7 +164,7 @@ class VendorMappingBootIntegrationTest {
         void stubS3WithValidBundle() {
             byte[] tgz = BundleArchiveBuilder.tgzOf(mvpSeedYaml, "vendor-mapping.yaml");
             when(s3Client.getObject(any(GetObjectRequest.class), any(ResponseTransformer.class)))
-                .thenReturn(responseBytesOf(tgz));
+                .thenReturn(S3TestFixtures.responseBytesOf(tgz));
             listener.onApplicationEvent(dummyStartedEvent());
         }
 
@@ -191,25 +214,19 @@ class VendorMappingBootIntegrationTest {
     @Nested
     class WhenS3Throws {
 
-        private ListAppender<ILoggingEvent> appender;
-        private Logger errorLogger;
+        private LogCapture logs;
 
         @BeforeEach
         void stubS3WithFailureAndAttachAppender() {
-            errorLogger = (Logger) LoggerFactory.getLogger(BundleLoadListener.class);
-            appender = new ListAppender<>();
-            appender.start();
-            errorLogger.addAppender(appender);
-
+            logs = new LogCapture(BundleLoadListener.class);
             when(s3Client.getObject(any(GetObjectRequest.class), any(ResponseTransformer.class)))
                 .thenThrow(SdkClientException.create("connection reset"));
-
             listener.onApplicationEvent(dummyStartedEvent());
         }
 
         @AfterEach
         void detachAppender() {
-            errorLogger.detachAppender(appender);
+            logs.detach();
         }
 
         @Test
@@ -223,11 +240,7 @@ class VendorMappingBootIntegrationTest {
 
         @Test
         void errorLog_shouldContainFailureClassAndS3Coordinates() {
-            ILoggingEvent err = appender.list.stream()
-                .filter(e -> e.getLevel() == Level.ERROR)
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("expected ERROR log event"));
-            assertThat(err.getFormattedMessage())
+            assertThat(logs.firstError().getFormattedMessage())
                 .contains("BundleLoadException")
                 .contains("test-bucket")
                 .contains("registry/mappings/vendor-mapping-v1.0.0.tgz");
@@ -237,15 +250,11 @@ class VendorMappingBootIntegrationTest {
     @Nested
     class WhenS3ReturnsInvalidBundle {
 
-        private ListAppender<ILoggingEvent> appender;
-        private Logger errorLogger;
+        private LogCapture logs;
 
         @BeforeEach
         void stubS3WithInvalidBundleAndAttachAppender() {
-            errorLogger = (Logger) LoggerFactory.getLogger(BundleLoadListener.class);
-            appender = new ListAppender<>();
-            appender.start();
-            errorLogger.addAppender(appender);
+            logs = new LogCapture(BundleLoadListener.class);
 
             // Bundle is structurally valid YAML but violates the schema:
             // source_value contains the reserved '|' character.
@@ -271,14 +280,14 @@ class VendorMappingBootIntegrationTest {
             byte[] tgz = BundleArchiveBuilder.tgzOf(
                 invalidYaml.getBytes(StandardCharsets.UTF_8), "vendor-mapping.yaml");
             when(s3Client.getObject(any(GetObjectRequest.class), any(ResponseTransformer.class)))
-                .thenReturn(responseBytesOf(tgz));
+                .thenReturn(S3TestFixtures.responseBytesOf(tgz));
 
             listener.onApplicationEvent(dummyStartedEvent());
         }
 
         @AfterEach
         void detachAppender() {
-            errorLogger.detachAppender(appender);
+            logs.detach();
         }
 
         @Test
@@ -289,11 +298,7 @@ class VendorMappingBootIntegrationTest {
 
         @Test
         void errorLog_shouldContainParseFailure() {
-            ILoggingEvent err = appender.list.stream()
-                .filter(e -> e.getLevel() == Level.ERROR)
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("expected ERROR log event"));
-            assertThat(err.getFormattedMessage())
+            assertThat(logs.firstError().getFormattedMessage())
                 .contains("BundleLoadException")
                 .contains("could not be parsed");
         }

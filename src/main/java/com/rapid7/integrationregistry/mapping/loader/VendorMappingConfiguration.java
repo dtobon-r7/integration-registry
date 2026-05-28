@@ -33,19 +33,15 @@ public class VendorMappingConfiguration {
     }
 
     /**
-     * Single holder bean. Spring's structural-autowiring rules apply here:
-     * because {@link VendorMappingSnapshotHolder} implements
+     * Single holder bean. Because {@link VendorMappingSnapshotHolder} implements
      * {@link VendorMappingSnapshot}, by-type autowiring of either type resolves
-     * to this same bean. Downstream consumers (T08 aggregator, future read-API
-     * code) can therefore inject {@code @Autowired VendorMappingSnapshot} and
-     * the listener / health indicator can inject
-     * {@code @Autowired VendorMappingSnapshotHolder} — both find this bean.
+     * to this same instance — downstream consumers inject
+     * {@code @Autowired VendorMappingSnapshot} while the listener / health
+     * indicator inject {@code @Autowired VendorMappingSnapshotHolder}.
      *
-     * <p>A second {@code @Bean} factory method returning the same holder under
-     * the {@code VendorMappingSnapshot} type would not work: Spring inspects
-     * the runtime return value of factory methods, so the registry would see
-     * two beans of type {@code VendorMappingSnapshotHolder} and break holder
-     * autowiring with {@code NoUniqueBeanDefinitionException}.
+     * <p>A separate {@code @Bean VendorMappingSnapshot} factory returning the
+     * same holder would register a second bean of runtime type
+     * {@code VendorMappingSnapshotHolder} and break holder autowiring.
      */
     @Bean
     public VendorMappingSnapshotHolder vendorMappingSnapshotHolder() {
