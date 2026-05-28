@@ -123,6 +123,14 @@ class VendorMappingBootIntegrationTest {
      * Captures Logback events from a target logger. Caller invokes
      * {@link #detach()} in {@code @AfterEach}. Used by the failure-path
      * scenarios below to assert ERROR log content.
+     *
+     * <p>Failure-path scenarios should call {@link #reset()} immediately
+     * before re-firing the listener so that captured events are
+     * unambiguously from the test's manual invocation, not the framework's
+     * earlier startup-time fire (which today is not seen by this appender —
+     * the appender attaches in {@code @BeforeEach}, after context refresh —
+     * but a future change to {@code @DirtiesContext} ordering or to Spring's
+     * event lifecycle could move that fire into the captured window).
      */
     static final class LogCapture {
         final Logger logger;
@@ -133,6 +141,10 @@ class VendorMappingBootIntegrationTest {
             this.appender = new ListAppender<>();
             this.appender.start();
             this.logger.addAppender(this.appender);
+        }
+
+        void reset() {
+            appender.list.clear();
         }
 
         void detach() {
@@ -221,6 +233,7 @@ class VendorMappingBootIntegrationTest {
             logs = new LogCapture(BundleLoadListener.class);
             when(s3Client.getObject(any(GetObjectRequest.class), any(ResponseTransformer.class)))
                 .thenThrow(SdkClientException.create("connection reset"));
+            logs.reset();
             listener.onApplicationEvent(dummyStartedEvent());
         }
 
@@ -282,6 +295,7 @@ class VendorMappingBootIntegrationTest {
             when(s3Client.getObject(any(GetObjectRequest.class), any(ResponseTransformer.class)))
                 .thenReturn(S3TestFixtures.responseBytesOf(tgz));
 
+            logs.reset();
             listener.onApplicationEvent(dummyStartedEvent());
         }
 

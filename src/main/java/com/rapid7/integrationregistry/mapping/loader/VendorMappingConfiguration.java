@@ -34,8 +34,8 @@ public class VendorMappingConfiguration {
 
     /**
      * Single holder bean. Because {@link VendorMappingSnapshotHolder} implements
-     * {@link VendorMappingSnapshot}, by-type autowiring of either type resolves
-     * to this same instance — downstream consumers inject
+     * {@link VendorMappingSnapshot}, Spring's by-type bean lookup resolves
+     * either type to this same instance — downstream consumers inject
      * {@code @Autowired VendorMappingSnapshot} while the listener / health
      * indicator inject {@code @Autowired VendorMappingSnapshotHolder}.
      *
