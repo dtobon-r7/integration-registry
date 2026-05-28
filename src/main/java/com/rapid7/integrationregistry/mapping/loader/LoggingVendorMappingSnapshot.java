@@ -22,9 +22,11 @@ final class LoggingVendorMappingSnapshot implements VendorMappingSnapshot {
     private static final String FIELD_DELEGATE = "delegate";
 
     private final VendorMappingSnapshot delegate;
+    private final String mappingVersion;
 
     LoggingVendorMappingSnapshot(VendorMappingSnapshot delegate) {
         this.delegate = Objects.requireNonNull(delegate, FIELD_DELEGATE);
+        this.mappingVersion = delegate.mappingVersion();
     }
 
     // Identity check on VendorResolution.unknown(): the snapshot returns the
@@ -38,13 +40,13 @@ final class LoggingVendorMappingSnapshot implements VendorMappingSnapshot {
         VendorResolution resolution = delegate.lookup(productName, sourceType, sourceValue);
         if (resolution == VendorResolution.unknown()) {
             log.warn("Unknown vendor mapping triplet: product={}, source_type={}, source_value={} (mapping_version={})",
-                     productName, sourceType, sourceValue, delegate.mappingVersion());
+                     productName, sourceType, sourceValue, mappingVersion);
         }
         return resolution;
     }
 
     @Override
     public String mappingVersion() {
-        return delegate.mappingVersion();
+        return mappingVersion;
     }
 }

@@ -4,25 +4,12 @@ import org.springframework.boot.health.contributor.Health;
 import org.springframework.boot.health.contributor.HealthIndicator;
 
 /**
- * Reports the bundle-load state to {@code /actuator/health} (and the readiness
- * group) by consulting the {@link VendorMappingSnapshotHolder}. Returns:
- *
- * <ul>
- *   <li>{@code UP} with the loaded {@code mapping_version} once the holder has
- *       been populated.</li>
- *   <li>{@code DOWN} with the configured {@code bundle_version} when the
- *       holder is empty (bundle load not yet succeeded).</li>
- * </ul>
- *
- * <p>Registered in the readiness group via
- * {@code management.endpoint.health.group.readiness.include} so
- * {@code /actuator/health/readiness} aggregates this indicator's status with
- * the framework's {@code readinessState}. Any DOWN indicator pulls the group
- * to DOWN, regardless of {@code AvailabilityState}.
- *
- * <p>This is the readiness gate's load-bearing component. The
- * {@link BundleLoadListener} runs the load and populates the holder; this
- * indicator translates the holder's state into the probe response.
+ * Reports bundle-load state to the readiness probe by consulting the
+ * {@link VendorMappingSnapshotHolder}. Registered in the readiness group via
+ * {@code management.endpoint.health.group.readiness.include=bundleLoad} so any
+ * DOWN here pulls {@code /actuator/health/readiness} to DOWN regardless of
+ * {@code AvailabilityState} — see {@link BundleLoadListener} for why
+ * {@code AvailabilityState} alone is insufficient.
  */
 final class BundleLoadHealthIndicator implements HealthIndicator {
 

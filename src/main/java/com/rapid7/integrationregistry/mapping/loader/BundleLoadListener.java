@@ -22,26 +22,6 @@ import org.springframework.context.ApplicationListener;
  * publish on a failed load. The custom {@code HealthIndicator} bypasses that
  * race entirely: it consults the holder at every probe call, so the readiness
  * state reflects the actual load outcome regardless of event ordering.
- *
- * <p>Lifecycle:
- *
- * <ol>
- *   <li>Listener fires on {@link ApplicationStartedEvent} (after context
- *       refresh, before runners).</li>
- *   <li>Loads the bundle (cache-first, S3 fallback).</li>
- *   <li>On success: wraps the loaded snapshot in a
- *       {@link LoggingVendorMappingSnapshot} decorator and populates the
- *       {@link VendorMappingSnapshotHolder}. The {@link BundleLoadHealthIndicator}
- *       will then return UP for {@code /actuator/health/readiness}.</li>
- *   <li>On failure: logs a structured ERROR with failure class and bundle/S3
- *       coordinates; the holder stays empty. The {@link BundleLoadHealthIndicator}
- *       returns DOWN, holding the replica out of rotation. Both
- *       {@link BundleLoadException} and unchecked {@link RuntimeException}s
- *       are absorbed identically — a startup failure must never propagate
- *       out of {@code onApplicationEvent} and crash context refresh, since
- *       that would defeat the readiness gate by forcing the replica into a
- *       hard-failed state instead of a held-out-of-rotation state.</li>
- * </ol>
  */
 final class BundleLoadListener implements ApplicationListener<ApplicationStartedEvent> {
 

@@ -19,6 +19,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Objects;
@@ -64,14 +65,9 @@ final class S3VendorMappingBundleLoader {
 
     /**
      * Hard cap on the inflated tar bytes streamed through the gzip decoder.
-     * Defends against a gzip-bomb that compresses to within the compressed cap
-     * but expands to gigabytes of memory pressure during tar extraction.
-     *
-     * <p>Enforced via {@code BoundedInputStream}, whose default behaviour is to
-     * return EOF once {@code maxCount} is reached rather than throw. A truncated
-     * tar stream then surfaces as an {@code IOException} from the tar parser
-     * and is wrapped in {@code archiveExtractFailed}. Either way memory is
-     * bounded — the byte budget never exceeds 200 MB regardless of payload.
+     * Gzip-bomb defence: {@code BoundedInputStream} returns EOF at the cap rather
+     * than throwing, so an oversized payload surfaces as an {@code IOException}
+     * from the tar parser and is wrapped in {@code archiveExtractFailed}.
      */
     private static final long MAX_BUNDLE_BYTES_INFLATED = 200L * 1024 * 1024;
 
@@ -87,21 +83,20 @@ final class S3VendorMappingBundleLoader {
 
     VendorMappingSnapshot load() throws BundleLoadException {
         Path cacheFile = properties.cacheFilePath();
-        if (Files.exists(cacheFile)) {
-            byte[] bytes;
+        try {
+            byte[] cached = Files.readAllBytes(cacheFile);
             try {
-                bytes = Files.readAllBytes(cacheFile);
-            } catch (IOException ioe) {
-                throw BundleLoadException.cacheReadFailed(cacheFile, ioe);
-            }
-            try {
-                return parseFromBytes(bytes);
+                return parseFromBytes(cached);
             } catch (BundleLoadException corruptCache) {
                 log.warn("vendor mapping disk cache corrupted at {}, deleting and falling through to S3 — {}",
                          cacheFile, corruptCache.getMessage());
                 deleteCorruptCache(cacheFile);
                 // fall through to S3 fetch
             }
+        } catch (NoSuchFileException ignored) {
+            // cache absent — fetch from S3
+        } catch (IOException ioe) {
+            throw BundleLoadException.cacheReadFailed(cacheFile, ioe);
         }
         byte[] bytes = fetchFromS3();
         writeCacheAtomically(cacheFile, bytes);
@@ -176,9 +171,8 @@ final class S3VendorMappingBundleLoader {
         try {
             return parser.parse(tarIn);
         } catch (BundleParseException | IllegalStateException ex) {
-            // BundleParseException = bundle-data failure (YAML / schema-validation).
-            // IllegalStateException = schema/enum-sync drift or missing schema resource
-            // (per BundleParser.parse Javadoc). Both are parse-class failures.
+            // BundleParseException = YAML/schema-validation failure.
+            // IllegalStateException = schema/enum-sync drift (per BundleParser.parse Javadoc).
             throw BundleLoadException.parseFailed(ex);
         }
     }
