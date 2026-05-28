@@ -28,7 +28,13 @@ import org.springframework.context.ApplicationListener;
  *   <li>On failure: logging a structured ERROR with failure class and
  *       bundle/S3 coordinates; readiness stays at
  *       {@code REFUSING_TRAFFIC} indefinitely so the replica is held out
- *       of rotation rather than serving with an empty snapshot.</li>
+ *       of rotation rather than serving with an empty snapshot. Both
+ *       declared {@link BundleLoadException} and unchecked
+ *       {@link RuntimeException}s are absorbed identically — a startup
+ *       failure must never propagate out of {@code onApplicationEvent}
+ *       and crash context refresh, since that would defeat the readiness
+ *       gate by forcing the replica into a hard-failed state instead of
+ *       a held-out-of-rotation state.</li>
  * </ol>
  */
 final class BundleLoadListener implements ApplicationListener<ApplicationStartedEvent> {
@@ -56,7 +62,7 @@ final class BundleLoadListener implements ApplicationListener<ApplicationStarted
         VendorMappingSnapshot loaded;
         try {
             loaded = loader.load();
-        } catch (BundleLoadException ex) {
+        } catch (BundleLoadException | RuntimeException ex) {
             log.error("Vendor mapping bundle load failed; readiness will remain REFUSING_TRAFFIC. "
                     + "failure_class={} bundle_version={} s3_bucket={} s3_key={} cause={}",
                     ex.getClass().getSimpleName(),

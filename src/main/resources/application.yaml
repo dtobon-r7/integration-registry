@@ -11,6 +11,15 @@ management:
       exposure:
         include: health
 
+integration-registry:
+  vendor-mapping:
+    cache-dir: ${java.io.tmpdir}/integration-registry/vendor-mapping
+    # bundle-version, s3-bucket, s3-key-prefix come from the deploy environment
+    # via env vars (e.g. INTEGRATION_REGISTRY_VENDOR_MAPPING_BUNDLE_VERSION) or
+    # per-profile overrides set at deploy time. They are intentionally absent
+    # from this default so that boots without a configured bundle version fail
+    # fast at property binding rather than silently picking up a stale default.
+
 ---
 spring:
   config:

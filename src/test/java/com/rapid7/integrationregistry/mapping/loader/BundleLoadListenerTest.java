@@ -184,4 +184,30 @@ class BundleLoadListenerTest {
             .contains("mapping_version=v1.0.0")
             .contains("bundle_version=v1.0.0");
     }
+
+    @Test
+    void onApplicationEvent_shouldAbsorbRuntimeException_whenLoaderThrowsUnchecked() throws Exception {
+        // Arrange — simulate a misconfigured/buggy collaborator throwing
+        // an unchecked exception that the listener must NOT propagate.
+        when(loader.load()).thenThrow(new NullPointerException("S3Client returned null"));
+
+        // Act
+        listener.onApplicationEvent(mock(ApplicationStartedEvent.class));
+
+        // Assert — readiness stays at REFUSING; holder is not populated;
+        // ERROR log captures the unchecked failure with failure_class=NullPointerException.
+        ArgumentCaptor<AvailabilityChangeEvent> capture = ArgumentCaptor.forClass(AvailabilityChangeEvent.class);
+        verify(events).publishEvent(capture.capture());   // exactly one event
+        assertThat(capture.getValue().getState()).isEqualTo(ReadinessState.REFUSING_TRAFFIC);
+        verifyNoInteractions(holder);
+
+        ILoggingEvent errorEvent = appender.list.stream()
+            .filter(e -> e.getLevel() == Level.ERROR)
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("expected ERROR log event"));
+        assertThat(errorEvent.getFormattedMessage())
+            .contains("Vendor mapping bundle load failed")
+            .contains("NullPointerException")
+            .contains("S3Client returned null");
+    }
 }
