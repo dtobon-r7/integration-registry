@@ -553,4 +553,236 @@ class VendorAggregatorTest {
           .containsExactlyInAnyOrder("new-product-a", "new-product-b", "new-product-c");
     }
   }
+
+  @Nested
+  class VendorScopedViewTest {
+
+    @Test
+    void toVendorScopedView_shouldReturnEmpty_whenIdNotFound() {
+      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      List<NormalizedIntegration> instances =
+          List.of(
+              NormalizedIntegrationFixtures.idrInstance("es_1", "x", IntegrationStatus.HEALTHY));
+
+      // Act
+      Optional<VendorScopedView> result =
+          aggregatorWith(snapshot).toVendorScopedView("microsoft", instances);
+
+      // Assert — input has no resolved Microsoft instances (it has only an
+      // unmapped instance, which lives under "unknown" vendor)
+      assertThat(result).isEmpty();
+    }
+
+    @Test
+    void toVendorScopedView_shouldRollUpAcrossVendorServices_atVendorLevel() {
+      // Arrange — Microsoft has two services. Defender is HEALTHY across all
+      // its instances; Sentinel has one ERROR instance. Per-vendor rollup
+      // must be ERROR — driven by Sentinel's VS aggregate, NOT by the
+      // Defender VS aggregate.
+      VendorResolution msSentinel =
+          new VendorResolution(
+              "microsoft-sentinel",
+              "Microsoft Sentinel",
+              VendorCategory.SIEM,
+              "microsoft",
+              "Microsoft");
+
+      VendorMappingSnapshot snapshot =
+          FakeVendorMappingSnapshot.with(MAPPING_VERSION)
+              .map(
+                  ProductName.INSIGHT_IDR,
+                  SourceType.PRODUCT_TYPE,
+                  "microsoft-defender-endpoint",
+                  MS_DEFENDER)
+              .map(
+                  ProductName.INSIGHT_IDR,
+                  SourceType.PRODUCT_TYPE,
+                  "microsoft-sentinel",
+                  msSentinel)
+              .build();
+
+      List<NormalizedIntegration> instances =
+          List.of(
+              NormalizedIntegrationFixtures.idrInstance(
+                  "es_1", "microsoft-defender-endpoint", IntegrationStatus.HEALTHY),
+              NormalizedIntegrationFixtures.idrInstance(
+                  "es_2", "microsoft-defender-endpoint", IntegrationStatus.HEALTHY),
+              NormalizedIntegrationFixtures.idrInstance(
+                  "es_3", "microsoft-sentinel", IntegrationStatus.ERROR));
+
+      // Act
+      Optional<VendorScopedView> result =
+          aggregatorWith(snapshot).toVendorScopedView("microsoft", instances);
+
+      // Assert
+      assertThat(result).isPresent();
+      VendorScopedView vendor = result.get();
+      assertThat(vendor.vendorId()).isEqualTo("microsoft");
+      assertThat(vendor.vendorName()).isEqualTo("Microsoft");
+      assertThat(vendor.vendorServicesCount()).isEqualTo(2);
+      assertThat(vendor.aggregateHealth()).isEqualTo(IntegrationStatus.ERROR);
+      assertThat(vendor.vendorServices()).hasSize(2);
+    }
+
+    @Test
+    void toVendorScopedView_shouldResolveUnknownVendorId_whenUnmappedInstancesPresent() {
+      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      List<NormalizedIntegration> instances =
+          List.of(
+              NormalizedIntegrationFixtures.iconInstance(
+                  "c_1", "new-product", IntegrationStatus.WARNING));
+
+      // Act
+      Optional<VendorScopedView> result =
+          aggregatorWith(snapshot).toVendorScopedView("unknown", instances);
+
+      // Assert — vendorId "unknown" resolves to the synthetic vendor
+      assertThat(result).isPresent();
+      assertThat(result.get().vendorId()).isEqualTo("unknown");
+      assertThat(result.get().vendorServicesCount()).isEqualTo(1);
+      assertThat(result.get().aggregateHealth()).isEqualTo(IntegrationStatus.WARNING);
+    }
+  }
+
+  @Nested
+  class UnknownCollapseTest {
+
+    @Test
+    void toVendorServiceCards_shouldCollapseAllUnmappedTriplets_intoOneSyntheticCard() {
+      // Arrange — three different unmapped triplets, each yielding its own DS
+      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      List<NormalizedIntegration> instances =
+          List.of(
+              NormalizedIntegrationFixtures.iconInstance("c_1", "alpha", IntegrationStatus.HEALTHY),
+              NormalizedIntegrationFixtures.iconInstance("c_2", "beta", IntegrationStatus.WARNING),
+              NormalizedIntegrationFixtures.iconInstance("c_3", "gamma", IntegrationStatus.ERROR));
+
+      // Act
+      List<VendorServiceCard> cards = aggregatorWith(snapshot).toVendorServiceCards(instances);
+
+      // Assert — exactly ONE synthetic VS card; aggregate ERROR; 3 instances; 3 distinct DSes
+      assertThat(cards).hasSize(1);
+      assertThat(cards.get(0).vendorServiceId()).isEqualTo("unknown");
+      assertThat(cards.get(0).vendorId()).isEqualTo("unknown");
+      assertThat(cards.get(0).vendorCategory()).isEqualTo(VendorCategory.OTHER);
+      assertThat(cards.get(0).integrationsConnected()).isEqualTo(3);
+      assertThat(cards.get(0).aggregateHealth()).isEqualTo(IntegrationStatus.ERROR);
+    }
+
+    @Test
+    void toVendorServiceCards_shouldEmitOneWarn_perDistinctUnmappedTriplet() {
+      // Arrange — three instances sharing a triplet + two with distinct triplets.
+      // Distinct triplet count = 3.
+      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      List<NormalizedIntegration> instances =
+          List.of(
+              NormalizedIntegrationFixtures.iconInstance("c_1", "alpha", IntegrationStatus.HEALTHY),
+              NormalizedIntegrationFixtures.iconInstance(
+                  "c_2", "alpha", IntegrationStatus.HEALTHY), // duplicate triplet
+              NormalizedIntegrationFixtures.iconInstance(
+                  "c_3", "alpha", IntegrationStatus.HEALTHY), // duplicate triplet
+              NormalizedIntegrationFixtures.iconInstance("c_4", "beta", IntegrationStatus.HEALTHY),
+              NormalizedIntegrationFixtures.iconInstance(
+                  "c_5", "gamma", IntegrationStatus.HEALTHY));
+
+      // Act
+      aggregatorWith(snapshot).toVendorServiceCards(instances);
+
+      // Assert — exactly 3 WARN events, one per distinct triplet
+      assertThat(appender.list).hasSize(3);
+      assertThat(appender.list)
+          .allSatisfy(e -> assertThat(e.getLevel().toString()).isEqualTo("WARN"));
+      assertThat(appender.list)
+          .extracting(ILoggingEvent::getFormattedMessage)
+          .anyMatch(m -> m.contains("alpha") && m.contains(MAPPING_VERSION))
+          .anyMatch(m -> m.contains("beta") && m.contains(MAPPING_VERSION))
+          .anyMatch(m -> m.contains("gamma") && m.contains(MAPPING_VERSION));
+    }
+  }
+
+  @Nested
+  class EdgeCasesTest {
+
+    @Test
+    void toVendorServiceCards_shouldReturnEmpty_forEmptyInput() {
+      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+
+      // Act
+      List<VendorServiceCard> cards = aggregatorWith(snapshot).toVendorServiceCards(List.of());
+
+      // Assert — empty list, no synthetic, no WARN
+      assertThat(cards).isEmpty();
+      assertThat(appender.list).isEmpty();
+    }
+
+    @Test
+    void toVendorCards_shouldReturnEmpty_forEmptyInput() {
+      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      assertThat(aggregatorWith(snapshot).toVendorCards(List.of())).isEmpty();
+      assertThat(appender.list).isEmpty();
+    }
+
+    @Test
+    void toVendorScopedView_shouldReturnEmpty_forEmptyInput() {
+      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      assertThat(aggregatorWith(snapshot).toVendorScopedView("microsoft", List.of())).isEmpty();
+    }
+
+    @Test
+    void toVendorServiceDetail_shouldReturnEmpty_forEmptyInput() {
+      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      assertThat(aggregatorWith(snapshot).toVendorServiceDetail("microsoft-defender", List.of()))
+          .isEmpty();
+    }
+
+    @Test
+    void toVendorServiceCards_shouldThrowNPE_whenInstancesNull() {
+      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      org.assertj.core.api.Assertions.assertThatNullPointerException()
+          .isThrownBy(() -> aggregatorWith(snapshot).toVendorServiceCards(null))
+          .withMessage("instances");
+    }
+
+    @Test
+    void toVendorScopedView_shouldThrowNPE_whenVendorIdNull() {
+      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      org.assertj.core.api.Assertions.assertThatNullPointerException()
+          .isThrownBy(() -> aggregatorWith(snapshot).toVendorScopedView(null, List.of()))
+          .withMessage("vendorId");
+    }
+
+    @Test
+    void toVendorServiceDetail_shouldThrowNPE_whenVendorServiceIdNull() {
+      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      org.assertj.core.api.Assertions.assertThatNullPointerException()
+          .isThrownBy(() -> aggregatorWith(snapshot).toVendorServiceDetail(null, List.of()))
+          .withMessage("vendorServiceId");
+    }
+
+    @Test
+    void resolution_shouldThrowIAE_whenAdapterSuppliedProductNameIsBlank() {
+      // Arrange — adapter contract violation: blank productName.
+      // Spec ruling: programming-error path, not folded into unknown.
+      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      NormalizedIntegration instance =
+          NormalizedIntegrationFixtures.instance(
+              "   ", "product_type", "x", "T", IntegrationStatus.HEALTHY, "i_1", null);
+
+      org.assertj.core.api.Assertions.assertThatIllegalArgumentException()
+          .isThrownBy(() -> aggregatorWith(snapshot).toVendorServiceCards(List.of(instance)))
+          .withMessageContaining("productName");
+    }
+
+    @Test
+    void resolution_shouldThrowIAE_whenAdapterSuppliedSourceTypeIsBlank() {
+      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      NormalizedIntegration instance =
+          NormalizedIntegrationFixtures.instance(
+              "InsightIDR", "   ", "x", "T", IntegrationStatus.HEALTHY, "i_1", null);
+
+      org.assertj.core.api.Assertions.assertThatIllegalArgumentException()
+          .isThrownBy(() -> aggregatorWith(snapshot).toVendorServiceCards(List.of(instance)))
+          .withMessageContaining("sourceType");
+    }
+  }
 }

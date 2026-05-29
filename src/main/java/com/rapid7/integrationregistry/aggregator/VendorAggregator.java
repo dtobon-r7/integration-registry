@@ -82,8 +82,16 @@ public final class VendorAggregator {
       String vendorId, List<NormalizedIntegration> instances) {
     Objects.requireNonNull(vendorId, "vendorId");
     Objects.requireNonNull(instances, FIELD_INSTANCES);
-    // Implemented in a later task.
-    return Optional.empty();
+    if (instances.isEmpty()) {
+      return Optional.empty();
+    }
+    List<ResolvedInstance> resolved = resolveAll(instances);
+    List<ResolvedInstance> scoped =
+        resolved.stream().filter(r -> vendorId.equals(r.resolution().vendorId())).toList();
+    if (scoped.isEmpty()) {
+      return Optional.empty();
+    }
+    return Optional.of(buildVendorScopedView(scoped));
   }
 
   public Optional<VendorServiceDetail> toVendorServiceDetail(
@@ -316,6 +324,21 @@ public final class VendorAggregator {
         status,
         integrations.size(),
         integrations);
+  }
+
+  // ----- vendor-scoped view -----
+
+  private VendorScopedView buildVendorScopedView(List<ResolvedInstance> scoped) {
+    VendorResolution v = scoped.get(0).resolution();
+    List<VendorServiceCard> services = buildVendorServiceCards(scoped);
+    IntegrationStatus aggregate =
+        services.stream()
+            .map(VendorServiceCard::aggregateHealth)
+            .reduce(HealthRollup::worstOf)
+            .orElseThrow();
+    Instant lastUpdated = latestSuccess(scoped);
+    return new VendorScopedView(
+        v.vendorId(), v.vendorName(), services.size(), aggregate, lastUpdated, services);
   }
 
   // ----- vendor cards -----
