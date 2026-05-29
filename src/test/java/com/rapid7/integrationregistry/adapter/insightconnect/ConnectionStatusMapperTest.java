@@ -16,6 +16,11 @@ class ConnectionStatusMapperTest {
         return new ConnectionTest("t", "c", status, isStale, null, createdAt);
     }
 
+    /** Wrap a single test as the connection's test list (deriveStatus selects the most recent). */
+    private static List<ConnectionTest> tests(ConnectionTest t) {
+        return List.of(t);
+    }
+
     private static final Instant T1 = Instant.parse("2026-05-01T00:00:00Z");
     private static final Instant T2 = Instant.parse("2026-05-02T00:00:00Z");
     private static final Instant T3 = Instant.parse("2026-05-03T00:00:00Z");
@@ -25,7 +30,7 @@ class ConnectionStatusMapperTest {
     @Test
     void deriveStatus_shouldReturnHealthy_whenOrchestratorHealthyAndTestSuccessAndNotStale() {
         // Arrange
-        ConnectionTest t = test("success", false, T1);
+        List<ConnectionTest> t = tests(test("success", false, T1));
         // Act
         IntegrationStatus status = mapper.deriveStatus("healthy", t);
         // Assert
@@ -35,44 +40,44 @@ class ConnectionStatusMapperTest {
     @Test
     void deriveStatus_shouldReturnError_whenOrchestratorError() {
         // Arrange
-        ConnectionTest t = test("success", false, T1);
+        List<ConnectionTest> t = tests(test("success", false, T1));
         // Act / Assert
         assertThat(mapper.deriveStatus("error", t)).isEqualTo(IntegrationStatus.ERROR);
     }
 
     @Test
     void deriveStatus_shouldReturnError_whenTestFailed() {
-        assertThat(mapper.deriveStatus("healthy", test("failed", false, T1)))
+        assertThat(mapper.deriveStatus("healthy", tests(test("failed", false, T1))))
             .isEqualTo(IntegrationStatus.ERROR);
     }
 
     @Test
     void deriveStatus_shouldReturnError_whenTestTimeout() {
-        assertThat(mapper.deriveStatus("healthy", test("timeout", false, T1)))
+        assertThat(mapper.deriveStatus("healthy", tests(test("timeout", false, T1))))
             .isEqualTo(IntegrationStatus.ERROR);
     }
 
     @Test
     void deriveStatus_shouldReturnMissingData_whenTestStale() {
-        assertThat(mapper.deriveStatus("healthy", test("success", true, T1)))
+        assertThat(mapper.deriveStatus("healthy", tests(test("success", true, T1))))
             .isEqualTo(IntegrationStatus.MISSING_DATA);
     }
 
     @Test
     void deriveStatus_shouldReturnMissingData_whenOrchestratorUnknown() {
-        assertThat(mapper.deriveStatus("unknown", test("success", false, T1)))
+        assertThat(mapper.deriveStatus("unknown", tests(test("success", false, T1))))
             .isEqualTo(IntegrationStatus.MISSING_DATA);
     }
 
     @Test
     void deriveStatus_shouldReturnWarning_whenOrchestratorWarning() {
-        assertThat(mapper.deriveStatus("warning", test("success", false, T1)))
+        assertThat(mapper.deriveStatus("warning", tests(test("success", false, T1))))
             .isEqualTo(IntegrationStatus.WARNING);
     }
 
     @Test
     void deriveStatus_shouldReturnDisabled_whenOrchestratorStopped() {
-        assertThat(mapper.deriveStatus("stopped", test("success", false, T1)))
+        assertThat(mapper.deriveStatus("stopped", tests(test("success", false, T1))))
             .isEqualTo(IntegrationStatus.DISABLED);
     }
 
@@ -81,8 +86,18 @@ class ConnectionStatusMapperTest {
     @Test
     void deriveStatus_shouldReturnError_whenTestFailedAndOrchestratorWarning() {
         // Precedence: error > warning
-        assertThat(mapper.deriveStatus("warning", test("failed", false, T1)))
+        assertThat(mapper.deriveStatus("warning", tests(test("failed", false, T1))))
             .isEqualTo(IntegrationStatus.ERROR);
+    }
+
+    @Test
+    void deriveStatus_shouldSelectMostRecentTest_whenMultiplePresent() {
+        // The latest test (T3, failed) drives status; an earlier success does not.
+        List<ConnectionTest> multi = List.of(
+            test("success", false, T1),
+            test("failed", false, T3),
+            test("success", false, T2));
+        assertThat(mapper.deriveStatus("healthy", multi)).isEqualTo(IntegrationStatus.ERROR);
     }
 
     @Test
@@ -90,31 +105,33 @@ class ConnectionStatusMapperTest {
         // No confirming healthy test => cannot confirm it works
         assertThat(mapper.deriveStatus("healthy", null))
             .isEqualTo(IntegrationStatus.MISSING_DATA);
+        assertThat(mapper.deriveStatus("healthy", List.of()))
+            .isEqualTo(IntegrationStatus.MISSING_DATA);
     }
 
     @Test
     void deriveStatus_shouldReturnMissingData_whenOrchestratorHealthyAndTestPending() {
-        assertThat(mapper.deriveStatus("healthy", test("pending", false, T1)))
+        assertThat(mapper.deriveStatus("healthy", tests(test("pending", false, T1))))
             .isEqualTo(IntegrationStatus.MISSING_DATA);
     }
 
     @Test
     void deriveStatus_shouldTreatNullIsStaleAsNotStale_whenHealthySuccess() {
         // null isStale must not block healthy
-        assertThat(mapper.deriveStatus("healthy", test("success", null, T1)))
+        assertThat(mapper.deriveStatus("healthy", tests(test("success", null, T1))))
             .isEqualTo(IntegrationStatus.HEALTHY);
     }
 
     @Test
     void deriveStatus_shouldReturnMissingData_whenOrchestratorUnrecognized() {
         // Forward-compat: a 6th orchestrator value falls back to missing_data
-        assertThat(mapper.deriveStatus("decommissioning", test("success", false, T1)))
+        assertThat(mapper.deriveStatus("decommissioning", tests(test("success", false, T1))))
             .isEqualTo(IntegrationStatus.MISSING_DATA);
     }
 
     @Test
     void deriveStatus_shouldReturnMissingData_whenOrchestratorNull() {
-        assertThat(mapper.deriveStatus(null, test("success", false, T1)))
+        assertThat(mapper.deriveStatus(null, tests(test("success", false, T1))))
             .isEqualTo(IntegrationStatus.MISSING_DATA);
     }
 
@@ -124,13 +141,13 @@ class ConnectionStatusMapperTest {
     void deriveStatus_shouldReturnHealthy_whenOrchestratorAndTestStatusAreUppercase() {
         // ICON documents lowercase enums; a casing change upstream must not flip
         // a healthy connection to missing_data.
-        assertThat(mapper.deriveStatus("HEALTHY", test("SUCCESS", false, T1)))
+        assertThat(mapper.deriveStatus("HEALTHY", tests(test("SUCCESS", false, T1))))
             .isEqualTo(IntegrationStatus.HEALTHY);
     }
 
     @Test
     void deriveStatus_shouldReturnError_whenTestStatusIsMixedCaseFailed() {
-        assertThat(mapper.deriveStatus("Healthy", test("Failed", false, T1)))
+        assertThat(mapper.deriveStatus("Healthy", tests(test("Failed", false, T1))))
             .isEqualTo(IntegrationStatus.ERROR);
     }
 
@@ -152,19 +169,19 @@ class ConnectionStatusMapperTest {
             test("success", false, T3),
             test("success", false, T2));
         // Act
-        ConnectionTest latest = mapper.mostRecentByCreatedAt(tests);
+        ConnectionTest latest = ConnectionStatusMapper.mostRecentByCreatedAt(tests);
         // Assert
         assertThat(latest.createdAt()).isEqualTo(T3);
     }
 
     @Test
     void mostRecentByCreatedAt_shouldReturnNull_whenEmpty() {
-        assertThat(mapper.mostRecentByCreatedAt(List.of())).isNull();
+        assertThat(ConnectionStatusMapper.mostRecentByCreatedAt(List.of())).isNull();
     }
 
     @Test
     void mostRecentByCreatedAt_shouldReturnNull_whenNull() {
-        assertThat(mapper.mostRecentByCreatedAt(null)).isNull();
+        assertThat(ConnectionStatusMapper.mostRecentByCreatedAt(null)).isNull();
     }
 
     // ---- deriveLastSuccess ----

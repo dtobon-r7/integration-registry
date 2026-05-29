@@ -3,10 +3,15 @@ package com.rapid7.integrationregistry.adapter.insightconnect;
 import com.rapid7.integrationregistry.adapter.FetchResult;
 import com.rapid7.integrationregistry.adapter.IntegrationStatus;
 import com.rapid7.integrationregistry.adapter.NormalizedIntegration;
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.rapid7.integrationregistry.adapter.exception.AdapterAuthException;
 import com.rapid7.integrationregistry.adapter.exception.AdapterUpstreamException;
 import com.rapid7.integrationregistry.testsupport.FixtureLoader;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -55,6 +60,15 @@ class InsightConnectAdapterContractTest {
               .andExpect(method(GET))
               .andRespond(withSuccess(FixtureLoader.read("insightconnect/" + fixture),
                                       MediaType.APPLICATION_JSON));
+    }
+
+    /** Attaches a logback ListAppender to the adapter's logger to capture emitted events. */
+    private static ListAppender<ILoggingEvent> captureAdapterLogs() {
+        Logger logger = (Logger) LoggerFactory.getLogger(InsightConnectAdapter.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        return appender;
     }
 
     @Test
@@ -171,6 +185,23 @@ class InsightConnectAdapterContractTest {
         assertThat(result.integrations()).hasSize(1);
         assertThat(result.integrations().get(0).integrationId())
             .isEqualTo("c1a2b3c4-0001-0001-0001-000000000001");
+        h.server().verify();
+    }
+
+    @Test
+    void fetch_shouldWarn_whenSkippingMalformedRecord() throws Exception {
+        // Arrange — capture logs; fixture has 2 malformed records (missing id, missing plugin name)
+        Harness h = harness();
+        ListAppender<ILoggingEvent> logs = captureAdapterLogs();
+        stub(h.server(), "malformed-skipped.json");
+        // Act
+        h.adapter().fetch(ORG_ID, new HttpHeaders());
+        // Assert — each skip is observable to a curator via a WARN
+        assertThat(logs.list)
+            .filteredOn(e -> e.getLevel() == Level.WARN)
+            .extracting(ILoggingEvent::getFormattedMessage)
+            .anySatisfy(m -> assertThat(m).contains("missing id"))
+            .anySatisfy(m -> assertThat(m).contains("missing plugin name"));
         h.server().verify();
     }
 

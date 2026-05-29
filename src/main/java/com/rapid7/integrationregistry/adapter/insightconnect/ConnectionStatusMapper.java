@@ -32,13 +32,19 @@ public class ConnectionStatusMapper {
     private static final String TEST_TIMEOUT = "timeout";
 
     /**
-     * Derive the instance status from the orchestrator status and the most
-     * recent connection test (which may be {@code null} when no tests exist).
-     * First match wins, in precedence order. An unrecognized or {@code null}
-     * orchestrator value falls back to {@link IntegrationStatus#MISSING_DATA}
-     * with a WARN log — one anomalous connection must not fail the fetch.
+     * Derive the instance status from the orchestrator status and the connection's
+     * tests. The most recent test by {@code createdAt} drives the test-derived
+     * signals; {@code tests} may be null/empty when no tests exist. First match
+     * wins, in precedence order. An unrecognized or {@code null} orchestrator value
+     * falls back to {@link IntegrationStatus#MISSING_DATA} with a WARN log — one
+     * anomalous connection must not fail the fetch.
+     *
+     * <p>Selecting the most-recent test is done here rather than by the caller, so
+     * there is no two-step protocol a caller could get wrong by passing a
+     * non-most-recent test.
      */
-    public IntegrationStatus deriveStatus(String orchestratorStatus, ConnectionTest mostRecentTest) {
+    public IntegrationStatus deriveStatus(String orchestratorStatus, List<ConnectionTest> tests) {
+        ConnectionTest mostRecentTest = mostRecentByCreatedAt(tests);
         // ICON's status enums are documented lowercase, but we normalize defensively:
         // a casing change upstream must not silently flip every healthy connection to
         // missing_data. Normalize once here; the helpers compare against lowercase literals.
@@ -101,8 +107,10 @@ public class ConnectionStatusMapper {
     /**
      * The most recent test by {@code createdAt}, or {@code null} when the list
      * is null/empty. Tests with a null {@code createdAt} sort earliest.
+     * Package-private: used internally by {@link #deriveStatus} and exercised
+     * directly by the unit tests; not part of the public mapper surface.
      */
-    public ConnectionTest mostRecentByCreatedAt(List<ConnectionTest> tests) {
+    static ConnectionTest mostRecentByCreatedAt(List<ConnectionTest> tests) {
         if (tests == null || tests.isEmpty()) {
             return null;
         }
