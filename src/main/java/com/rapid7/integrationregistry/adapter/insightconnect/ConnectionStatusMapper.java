@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Pure health-derivation logic for ICON connections (RFC-001
@@ -38,55 +39,63 @@ public class ConnectionStatusMapper {
      * with a WARN log — one anomalous connection must not fail the fetch.
      */
     public IntegrationStatus deriveStatus(String orchestratorStatus, ConnectionTest mostRecentTest) {
+        // ICON's status enums are documented lowercase, but we normalize defensively:
+        // a casing change upstream must not silently flip every healthy connection to
+        // missing_data. Normalize once here; the helpers compare against lowercase literals.
+        String orch = normalize(orchestratorStatus);
+        String testStatus = mostRecentTest == null ? null : normalize(mostRecentTest.status());
+        boolean stale = mostRecentTest != null && Boolean.TRUE.equals(mostRecentTest.isStale());
+
         // First match wins, in precedence order: error > missing_data > warning > disabled > healthy.
-        if (isErrorState(orchestratorStatus, mostRecentTest)) {
+        // The two highest-precedence rules combine test and orchestrator signals; the
+        // remaining rules are orchestrator-only and are resolved in a helper to keep this
+        // method's branch count low.
+        if (isErrorState(orch, testStatus)) {
             return IntegrationStatus.ERROR;
         }
-        if (isMissingDataState(orchestratorStatus, mostRecentTest)) {
+        if (stale || ORCH_UNKNOWN.equals(orch)) {
             return IntegrationStatus.MISSING_DATA;
         }
-        if (ORCH_WARNING.equals(orchestratorStatus)) {
+        return deriveFromOrchestrator(orch, testStatus, orchestratorStatus);
+    }
+
+    /**
+     * Resolve the warning / disabled / healthy / missing_data-tail rules, which
+     * depend on the orchestrator status (plus a confirming test for healthy).
+     * {@code orch} / {@code testStatus} are normalized; {@code rawOrch} is the
+     * original value, logged verbatim when unrecognized.
+     */
+    private IntegrationStatus deriveFromOrchestrator(String orch, String testStatus, String rawOrch) {
+        if (ORCH_WARNING.equals(orch)) {
             return IntegrationStatus.WARNING;
         }
-        if (ORCH_STOPPED.equals(orchestratorStatus)) {
+        if (ORCH_STOPPED.equals(orch)) {
             return IntegrationStatus.DISABLED;
         }
-        if (isHealthyState(orchestratorStatus, mostRecentTest)) {
+        // Healthy requires a confirming successful test. Staleness is not re-checked —
+        // a stale test already resolved to missing_data in deriveStatus, so it never reaches here.
+        if (ORCH_HEALTHY.equals(orch) && TEST_SUCCESS.equals(testStatus)) {
             return IntegrationStatus.HEALTHY;
         }
         // Tail: healthy orchestrator with no confirming test, or any unrecognized /
         // null orchestrator value. Only the latter is genuinely anomalous, so only
-        // it is logged.
-        if (!ORCH_HEALTHY.equals(orchestratorStatus)) {
-            log.warn("Unrecognized ICON orchestrator status '{}'; mapping to missing_data",
-                     orchestratorStatus);
+        // it is logged (with the original, un-normalized value for fidelity).
+        if (!ORCH_HEALTHY.equals(orch)) {
+            log.warn("Unrecognized ICON orchestrator status '{}'; mapping to missing_data", rawOrch);
         }
         return IntegrationStatus.MISSING_DATA;
     }
 
-    /** A failed/timeout test or an {@code error} orchestrator. */
-    private static boolean isErrorState(String orchestratorStatus, ConnectionTest test) {
-        String testStatus = test == null ? null : test.status();
+    /** A failed/timeout test or an {@code error} orchestrator. Inputs already normalized. */
+    private static boolean isErrorState(String orchestratorStatus, String testStatus) {
         return TEST_FAILED.equals(testStatus)
             || TEST_TIMEOUT.equals(testStatus)
             || ORCH_ERROR.equals(orchestratorStatus);
     }
 
-    /** A stale test or an {@code unknown} orchestrator — the two RFC {@code missing_data} triggers. */
-    private static boolean isMissingDataState(String orchestratorStatus, ConnectionTest test) {
-        boolean stale = test != null && Boolean.TRUE.equals(test.isStale());
-        return stale || ORCH_UNKNOWN.equals(orchestratorStatus);
-    }
-
-    /**
-     * A {@code healthy} orchestrator confirmed by a successful test. Staleness is
-     * not re-checked here — a stale test resolves to {@code missing_data} earlier
-     * via {@link #isMissingDataState}, so it never reaches this rule.
-     */
-    private static boolean isHealthyState(String orchestratorStatus, ConnectionTest test) {
-        return ORCH_HEALTHY.equals(orchestratorStatus)
-            && test != null
-            && TEST_SUCCESS.equals(test.status());
+    /** Lowercase a status string for case-insensitive comparison; {@code null} stays {@code null}. */
+    private static String normalize(String status) {
+        return status == null ? null : status.toLowerCase(Locale.ROOT);
     }
 
     /**
@@ -114,7 +123,7 @@ public class ConnectionStatusMapper {
             return null;
         }
         return tests.stream()
-            .filter(t -> TEST_SUCCESS.equals(t.status()) && t.createdAt() != null)
+            .filter(t -> TEST_SUCCESS.equals(normalize(t.status())) && t.createdAt() != null)
             .map(ConnectionTest::createdAt)
             .max(Comparator.naturalOrder())
             .orElse(null);

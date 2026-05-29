@@ -8,6 +8,8 @@ import com.rapid7.integrationregistry.adapter.SourceIdentifier;
 import com.rapid7.integrationregistry.adapter.exception.AdapterAuthException;
 import com.rapid7.integrationregistry.adapter.exception.AdapterTimeoutException;
 import com.rapid7.integrationregistry.adapter.exception.AdapterUpstreamException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
@@ -29,6 +31,8 @@ import java.util.List;
  */
 @Component
 public class InsightConnectAdapter implements IntegrationAdapter {
+
+    private static final Logger log = LoggerFactory.getLogger(InsightConnectAdapter.class);
 
     static final String PRODUCT_NAME = "InsightConnect";
     static final String INTEGRATION_TYPE = "Automation Plugin";
@@ -60,11 +64,58 @@ public class InsightConnectAdapter implements IntegrationAdapter {
         List<ConnectionViewModel> connections =
             response == null || response.data() == null ? List.of() : response.data();
 
+        warnIfTruncated(response, connections.size());
+
+        // Skip records missing the identity fields we cannot normalize (id, plugin name)
+        // rather than throwing — one malformed connection must not zero out the whole
+        // InsightConnect view. Skips are logged so a curator can investigate.
         List<NormalizedIntegration> integrations = connections.stream()
+            .filter(this::isNormalizable)
             .map(cvm -> normalize(cvm, orgId))
             .toList();
 
         return new FetchResult(integrations, Instant.now());
+    }
+
+    /**
+     * Warn when the response carries a {@code metadata.total} greater than the
+     * number of connections actually returned — a signal that ICON paginated and
+     * this single-page fetch under-reports. RFC-001 states a single call returns
+     * everything for ICON; this tripwire makes a violation of that assumption
+     * visible instead of silently truncating. (Paged fetching is a future follow-up.)
+     */
+    private void warnIfTruncated(ConnectionsResponse response, int returned) {
+        if (response == null || response.metadata() == null) {
+            return;
+        }
+        Integer total = response.metadata().total();
+        if (total != null && total > returned) {
+            log.warn("InsightConnect reported total={} but returned {} connections; "
+                     + "response may be paginated and under-reported", total, returned);
+        }
+    }
+
+    /**
+     * A connection is normalizable only if it carries the identity fields the
+     * normalized record requires: a non-blank {@code id} (the integration id) and
+     * a non-blank {@code plugin.name} (the source identifier). Records missing
+     * either are skipped with a WARN.
+     */
+    private boolean isNormalizable(ConnectionViewModel cvm) {
+        if (isBlank(cvm.id())) {
+            log.warn("Skipping InsightConnect connection with missing id");
+            return false;
+        }
+        String pluginName = cvm.plugin() == null ? null : cvm.plugin().name();
+        if (isBlank(pluginName)) {
+            log.warn("Skipping InsightConnect connection '{}' with missing plugin name", cvm.id());
+            return false;
+        }
+        return true;
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     private ConnectionsResponse call(HttpHeaders authHeaders)
@@ -107,11 +158,12 @@ public class InsightConnectAdapter implements IntegrationAdapter {
     }
 
     private NormalizedIntegration normalize(ConnectionViewModel cvm, String orgId) {
+        // id and plugin.name are guaranteed non-blank here by isNormalizable().
         ConnectionTest mostRecent = statusMapper.mostRecentByCreatedAt(cvm.connectionTests());
         String orchestratorStatus = cvm.orchestrator() == null ? null : cvm.orchestrator().status();
         IntegrationStatus status = statusMapper.deriveStatus(orchestratorStatus, mostRecent);
         Instant lastSuccess = statusMapper.deriveLastSuccess(cvm.connectionTests());
-        String pluginName = cvm.plugin() == null ? null : cvm.plugin().name();
+        String pluginName = cvm.plugin().name();
 
         return new NormalizedIntegration(
             cvm.id(),

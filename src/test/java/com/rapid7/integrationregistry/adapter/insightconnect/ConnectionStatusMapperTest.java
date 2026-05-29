@@ -118,6 +118,30 @@ class ConnectionStatusMapperTest {
             .isEqualTo(IntegrationStatus.MISSING_DATA);
     }
 
+    // ---- case-insensitivity (defensive normalization) ----
+
+    @Test
+    void deriveStatus_shouldReturnHealthy_whenOrchestratorAndTestStatusAreUppercase() {
+        // ICON documents lowercase enums; a casing change upstream must not flip
+        // a healthy connection to missing_data.
+        assertThat(mapper.deriveStatus("HEALTHY", test("SUCCESS", false, T1)))
+            .isEqualTo(IntegrationStatus.HEALTHY);
+    }
+
+    @Test
+    void deriveStatus_shouldReturnError_whenTestStatusIsMixedCaseFailed() {
+        assertThat(mapper.deriveStatus("Healthy", test("Failed", false, T1)))
+            .isEqualTo(IntegrationStatus.ERROR);
+    }
+
+    @Test
+    void deriveLastSuccess_shouldMatchSuccessCaseInsensitively() {
+        // Arrange
+        List<ConnectionTest> tests = List.of(test("SUCCESS", false, T2));
+        // Act / Assert
+        assertThat(mapper.deriveLastSuccess(tests)).isEqualTo(T2);
+    }
+
     // ---- mostRecentByCreatedAt ----
 
     @Test

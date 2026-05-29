@@ -161,6 +161,45 @@ class InsightConnectAdapterContractTest {
     }
 
     @Test
+    void fetch_shouldSkipMalformedRecords_whenIdOrPluginNameMissing() throws Exception {
+        // Arrange — fixture has 1 valid + 2 malformed (null plugin.name, missing id)
+        Harness h = harness();
+        stub(h.server(), "malformed-skipped.json");
+        // Act
+        FetchResult result = h.adapter().fetch(ORG_ID, new HttpHeaders());
+        // Assert — only the valid connection survives; one bad record must not fail the batch
+        assertThat(result.integrations()).hasSize(1);
+        assertThat(result.integrations().get(0).integrationId())
+            .isEqualTo("c1a2b3c4-0001-0001-0001-000000000001");
+        h.server().verify();
+    }
+
+    @Test
+    void fetch_shouldStillReturnConnections_whenMetadataTotalExceedsReturned() throws Exception {
+        // Arrange — metadata.total (5) > data.size() (1): a pagination-truncation signal.
+        // The adapter logs a WARN but still returns what it got (no throw, no drop).
+        Harness h = harness();
+        String body = """
+            { "data": [ {
+                "id": "c-1",
+                "name": "Jira",
+                "plugin": { "name": "jira", "pluginVendor": "rapid7", "pluginVersion": "11.3.0" },
+                "orchestrator": { "id": "o", "name": "Orch", "status": "healthy", "version": "3" },
+                "connectionTests": [
+                    { "id": "ct", "connectionId": "c-1", "status": "success", "isStale": false, "errorMessage": null, "createdAt": "2026-05-19T10:00:00Z" }
+                ]
+            } ], "metadata": { "total": 5 } }
+            """;
+        h.server().expect(requestTo(CONNECTIONS_URL)).andExpect(method(GET))
+            .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+        // Act
+        FetchResult result = h.adapter().fetch(ORG_ID, new HttpHeaders());
+        // Assert — the returned page is still surfaced
+        assertThat(result.integrations()).hasSize(1);
+        h.server().verify();
+    }
+
+    @Test
     void fetch_shouldPreferApiReturnedConfigurationUrl_whenPresent() throws Exception {
         // Arrange — inline body carrying an explicit configurationUrl
         Harness h = harness();
