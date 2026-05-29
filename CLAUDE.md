@@ -90,6 +90,7 @@ See [TESTING.md](TESTING.md).
 |------|------|----------|
 | Architecture | ArchUnit | Layer boundary violations (RFC-001) |
 | Code quality | PMD | Rule violations in `pmd-ruleset.xml` |
+| Formatting | Spotless / Google Java Format | Any `.java` file not formatted to GJF style |
 
 **PMD ruleset provenance**: Curated from scratch targeting LLM/agentic development failure modes — empty catch blocks, hallucination residue (unused code), structural bloat, placeholder leftovers. Not pulled from another platform service (none had PMD configured).
 

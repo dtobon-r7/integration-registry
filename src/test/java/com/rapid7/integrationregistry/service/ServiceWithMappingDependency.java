@@ -4,6 +4,6 @@ import com.rapid7.integrationregistry.mapping.VendorResolution;
 
 class ServiceWithMappingDependency {
 
-    @SuppressWarnings("unused")
-    private VendorResolution illegal;
+  @SuppressWarnings("unused")
+  private VendorResolution illegal;
 }
