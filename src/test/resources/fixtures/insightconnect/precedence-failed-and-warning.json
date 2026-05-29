@@ -1,0 +1,14 @@
+{
+  "data": [
+    {
+      "id": "c1a2b3c4-0007-0007-0007-000000000007",
+      "name": "Jira Precedence",
+      "plugin": { "name": "jira", "pluginVendor": "rapid7", "pluginVersion": "11.3.0" },
+      "orchestrator": { "id": "orch-1", "name": "Cloud Orchestrator", "status": "warning", "version": "3.1.4" },
+      "connectionTests": [
+        { "id": "ct-7", "connectionId": "c1a2b3c4-0007-0007-0007-000000000007", "status": "failed", "isStale": false, "errorMessage": "boom", "createdAt": "2026-05-18T08:00:00Z" }
+      ]
+    }
+  ],
+  "metadata": { "total": 1 }
+}

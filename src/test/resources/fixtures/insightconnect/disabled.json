@@ -1,0 +1,14 @@
+{
+  "data": [
+    {
+      "id": "c1a2b3c4-0006-0006-0006-000000000006",
+      "name": "Jira Disabled",
+      "plugin": { "name": "jira", "pluginVendor": "rapid7", "pluginVersion": "11.3.0" },
+      "orchestrator": { "id": "orch-1", "name": "Cloud Orchestrator", "status": "stopped", "version": "3.1.4" },
+      "connectionTests": [
+        { "id": "ct-6", "connectionId": "c1a2b3c4-0006-0006-0006-000000000006", "status": "success", "isStale": false, "errorMessage": null, "createdAt": "2026-05-18T08:00:00Z" }
+      ]
+    }
+  ],
+  "metadata": { "total": 1 }
+}
