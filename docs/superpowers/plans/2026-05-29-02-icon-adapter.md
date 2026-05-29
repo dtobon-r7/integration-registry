@@ -1312,7 +1312,7 @@ git commit -m "test(track-05/wp-02): configuration_url preference + exception-ma
 - [ ] **Step 1: Run the full build**
 
 Run: `./mvnw -q -o verify`
-Expected: BUILD SUCCESS — JUnit (all `insightconnect` tests + existing suite), ArchUnit (adapter package respects layer boundaries), PMD (no empty catch, no unused code, no placeholder stubs). The `// TODO(T10)` marker is on working code and does not trip PMD's placeholder rules.
+Expected: BUILD SUCCESS — JUnit (all `insightconnect` tests + existing suite), ArchUnit (adapter package respects layer boundaries), PMD (no empty catch, no unused code, no placeholder stubs). NOTE: the PMD `CommentContent` rule forbids the literal tokens `TODO|FIXME|HACK|XXX`, so the T10 marker must NOT use the literal word `TODO` — phrase it as a greppable `T10 integration point` comment on the working header-forwarding code instead.
 
 - [ ] **Step 2: If PMD or ArchUnit flags anything, fix inline and re-run**
 

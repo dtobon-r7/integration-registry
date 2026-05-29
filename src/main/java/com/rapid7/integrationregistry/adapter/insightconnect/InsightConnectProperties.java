@@ -32,8 +32,16 @@ public record InsightConnectProperties(
     public InsightConnectProperties {
         Objects.requireNonNull(baseUrl, FIELD_BASE_URL);
         Objects.requireNonNull(iconBase, FIELD_ICON_BASE);
+        // Strip a trailing slash so configuration_url templating
+        // ({iconBase}/automation/connections/{id}) never produces a double slash,
+        // regardless of how the deploy environment formats the value.
+        iconBase = stripTrailingSlash(iconBase);
         if (timeout == null) {
             timeout = DEFAULT_TIMEOUT;
         }
+    }
+
+    private static String stripTrailingSlash(String url) {
+        return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
     }
 }

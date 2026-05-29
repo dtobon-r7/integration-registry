@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
@@ -102,20 +103,16 @@ public class InsightConnectAdapter implements IntegrationAdapter {
      * either are skipped with a WARN.
      */
     private boolean isNormalizable(ConnectionViewModel cvm) {
-        if (isBlank(cvm.id())) {
+        if (!StringUtils.hasText(cvm.id())) {
             log.warn("Skipping InsightConnect connection with missing id");
             return false;
         }
         String pluginName = cvm.plugin() == null ? null : cvm.plugin().name();
-        if (isBlank(pluginName)) {
+        if (!StringUtils.hasText(pluginName)) {
             log.warn("Skipping InsightConnect connection '{}' with missing plugin name", cvm.id());
             return false;
         }
         return true;
-    }
-
-    private static boolean isBlank(String value) {
-        return value == null || value.isBlank();
     }
 
     private ConnectionsResponse call(HttpHeaders authHeaders)
@@ -146,7 +143,9 @@ public class InsightConnectAdapter implements IntegrationAdapter {
     /**
      * Map a 4xx to the matching adapter exception, preserving the cause: 401/403
      * are auth failures; every other 4xx is treated as upstream-broken (the
-     * contract exposes no distinct 4xx signal). Always throws.
+     * contract exposes no distinct 4xx signal). Always throws — extracted so
+     * {@link #call} stays within the complexity budget while keeping each thrown
+     * type concrete (so {@code fetch}'s declared signature stays precise).
      */
     private static void throwClientError(HttpClientErrorException e)
             throws AdapterAuthException, AdapterUpstreamException {
@@ -179,7 +178,7 @@ public class InsightConnectAdapter implements IntegrationAdapter {
 
     private String configurationUrl(ConnectionViewModel cvm) {
         String apiUrl = cvm.configurationUrl();
-        if (apiUrl != null && !apiUrl.isBlank()) {
+        if (StringUtils.hasText(apiUrl)) {
             return apiUrl;
         }
         return properties.iconBase() + "/automation/connections/" + cvm.id();
