@@ -3,17 +3,23 @@ package com.rapid7.integrationregistry.adapter.insightconnect;
 import com.rapid7.integrationregistry.adapter.FetchResult;
 import com.rapid7.integrationregistry.adapter.IntegrationStatus;
 import com.rapid7.integrationregistry.adapter.NormalizedIntegration;
+import com.rapid7.integrationregistry.adapter.exception.AdapterAuthException;
+import com.rapid7.integrationregistry.adapter.exception.AdapterTimeoutException;
+import com.rapid7.integrationregistry.adapter.exception.AdapterUpstreamException;
 import com.rapid7.integrationregistry.testsupport.FixtureLoader;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.test.web.client.response.MockRestResponseCreators;
 import org.springframework.web.client.RestClient;
 
 import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
@@ -152,6 +158,77 @@ class InsightConnectAdapterContractTest {
             .filteredOn(n -> n.integrationId().equals("c1a2b3c4-0002-0002-0002-000000000002"))
             .singleElement()
             .satisfies(n -> assertThat(n.status()).isEqualTo(IntegrationStatus.ERROR));
+        h.server().verify();
+    }
+
+    @Test
+    void fetch_shouldPreferApiReturnedConfigurationUrl_whenPresent() throws Exception {
+        // Arrange — inline body carrying an explicit configurationUrl
+        Harness h = harness();
+        String body = """
+            { "data": [ {
+                "id": "c-9",
+                "name": "Jira With URL",
+                "plugin": { "name": "jira", "pluginVendor": "rapid7", "pluginVersion": "11.3.0" },
+                "orchestrator": { "id": "o", "name": "Orch", "status": "healthy", "version": "3" },
+                "configurationUrl": "https://custom.example/connections/c-9",
+                "connectionTests": [
+                    { "id": "ct", "connectionId": "c-9", "status": "success", "isStale": false, "errorMessage": null, "createdAt": "2026-05-19T10:00:00Z" }
+                ]
+            } ], "metadata": { "total": 1 } }
+            """;
+        h.server().expect(requestTo(CONNECTIONS_URL)).andExpect(method(GET))
+            .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+        // Act
+        FetchResult result = h.adapter().fetch(ORG_ID, new HttpHeaders());
+        // Assert
+        assertThat(result.integrations().get(0).configurationUrl())
+            .isEqualTo("https://custom.example/connections/c-9");
+        h.server().verify();
+    }
+
+    @Test
+    void fetch_shouldThrowUpstream_whenServerReturns503() {
+        Harness h = harness();
+        h.server().expect(requestTo(CONNECTIONS_URL)).andExpect(method(GET))
+            .andRespond(MockRestResponseCreators.withServerError());
+        assertThatThrownBy(() -> h.adapter().fetch(ORG_ID, new HttpHeaders()))
+            .isInstanceOf(AdapterUpstreamException.class)
+            .satisfies(ex -> {
+                assertThat(((AdapterUpstreamException) ex).reasonCode()).isEqualTo("upstream_5xx");
+                assertThat(ex.getCause()).isNotNull();
+            });
+        h.server().verify();
+    }
+
+    @Test
+    void fetch_shouldThrowAuth_whenServerReturns401() {
+        Harness h = harness();
+        h.server().expect(requestTo(CONNECTIONS_URL)).andExpect(method(GET))
+            .andRespond(MockRestResponseCreators.withUnauthorizedRequest());
+        assertThatThrownBy(() -> h.adapter().fetch(ORG_ID, new HttpHeaders()))
+            .isInstanceOf(AdapterAuthException.class)
+            .satisfies(ex -> assertThat(((AdapterAuthException) ex).reasonCode()).isEqualTo("auth_failure"));
+        h.server().verify();
+    }
+
+    @Test
+    void fetch_shouldThrowAuth_whenServerReturns403() {
+        Harness h = harness();
+        h.server().expect(requestTo(CONNECTIONS_URL)).andExpect(method(GET))
+            .andRespond(MockRestResponseCreators.withStatus(HttpStatus.FORBIDDEN));
+        assertThatThrownBy(() -> h.adapter().fetch(ORG_ID, new HttpHeaders()))
+            .isInstanceOf(AdapterAuthException.class);
+        h.server().verify();
+    }
+
+    @Test
+    void fetch_shouldThrowUpstream_whenServerReturns404() {
+        Harness h = harness();
+        h.server().expect(requestTo(CONNECTIONS_URL)).andExpect(method(GET))
+            .andRespond(MockRestResponseCreators.withStatus(HttpStatus.NOT_FOUND));
+        assertThatThrownBy(() -> h.adapter().fetch(ORG_ID, new HttpHeaders()))
+            .isInstanceOf(AdapterUpstreamException.class);
         h.server().verify();
     }
 }
