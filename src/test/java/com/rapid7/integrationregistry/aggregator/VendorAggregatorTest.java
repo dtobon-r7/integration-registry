@@ -15,6 +15,7 @@ import com.rapid7.integrationregistry.mapping.VendorMappingSnapshot;
 import com.rapid7.integrationregistry.mapping.VendorResolution;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -428,6 +429,128 @@ class VendorAggregatorTest {
       assertThat(vendors.get(0).vendorId()).isEqualTo("unknown");
       assertThat(vendors.get(0).vendorName()).isEqualTo("Unknown");
       assertThat(vendors.get(0).vendorServicesCount()).isEqualTo(1);
+    }
+  }
+
+  @Nested
+  class VendorServiceDetailTest {
+
+    @Test
+    void toVendorServiceDetail_shouldReturnEmpty_whenIdNotFound() {
+      VendorMappingSnapshot snapshot =
+          FakeVendorMappingSnapshot.with(MAPPING_VERSION)
+              .map(
+                  ProductName.INSIGHT_IDR,
+                  SourceType.PRODUCT_TYPE,
+                  "microsoft-defender-endpoint",
+                  MS_DEFENDER)
+              .build();
+      List<NormalizedIntegration> instances =
+          List.of(
+              NormalizedIntegrationFixtures.idrInstance(
+                  "es_1", "microsoft-defender-endpoint", IntegrationStatus.HEALTHY));
+
+      // Act — ask for a different vendor service
+      Optional<VendorServiceDetail> result =
+          aggregatorWith(snapshot).toVendorServiceDetail("microsoft-sentinel", instances);
+
+      // Assert
+      assertThat(result).isEmpty();
+    }
+
+    @Test
+    void toVendorServiceDetail_shouldReturnDetailWithDataSources_whenFound() {
+      // Arrange — Microsoft Defender via two products, three instances
+      VendorMappingSnapshot snapshot =
+          FakeVendorMappingSnapshot.with(MAPPING_VERSION)
+              .map(
+                  ProductName.INSIGHT_IDR,
+                  SourceType.PRODUCT_TYPE,
+                  "microsoft-defender-endpoint",
+                  MS_DEFENDER)
+              .map(
+                  ProductName.INSIGHT_CONNECT,
+                  SourceType.PLUGIN_NAME,
+                  "microsoft-defender",
+                  MS_DEFENDER)
+              .build();
+      List<NormalizedIntegration> instances =
+          List.of(
+              NormalizedIntegrationFixtures.idrInstance(
+                  "es_1", "microsoft-defender-endpoint", IntegrationStatus.HEALTHY),
+              NormalizedIntegrationFixtures.idrInstance(
+                  "es_2", "microsoft-defender-endpoint", IntegrationStatus.ERROR),
+              NormalizedIntegrationFixtures.iconInstance(
+                  "c_1", "microsoft-defender", IntegrationStatus.HEALTHY));
+
+      // Act
+      Optional<VendorServiceDetail> result =
+          aggregatorWith(snapshot).toVendorServiceDetail("microsoft-defender", instances);
+
+      // Assert
+      assertThat(result).isPresent();
+      VendorServiceDetail detail = result.get();
+      assertThat(detail.vendorServiceId()).isEqualTo("microsoft-defender");
+      assertThat(detail.integrationsConnected()).isEqualTo(3);
+      assertThat(detail.aggregateHealth()).isEqualTo(IntegrationStatus.ERROR);
+      assertThat(detail.dataSources()).hasSize(2);
+
+      DataSourceDetail idrDs =
+          detail.dataSources().stream()
+              .filter(d -> d.productName().equals("InsightIDR"))
+              .findFirst()
+              .orElseThrow();
+      DataSourceDetail iconDs =
+          detail.dataSources().stream()
+              .filter(d -> d.productName().equals("InsightConnect"))
+              .findFirst()
+              .orElseThrow();
+
+      // Canonical data_source_id locked here — RFC §data_source_id construction
+      assertThat(idrDs.dataSourceId())
+          .isEqualTo("insightidr|product_type|microsoft-defender-endpoint");
+      assertThat(idrDs.integrationsCount()).isEqualTo(2);
+      assertThat(idrDs.status()).isEqualTo(IntegrationStatus.ERROR);
+      assertThat(idrDs.integrations()).hasSize(2);
+
+      assertThat(iconDs.dataSourceId()).isEqualTo("insightconnect|plugin_name|microsoft-defender");
+      assertThat(iconDs.integrationsCount()).isEqualTo(1);
+      assertThat(iconDs.status()).isEqualTo(IntegrationStatus.HEALTHY);
+    }
+
+    @Test
+    void toVendorServiceDetail_shouldResolveUnknownVendorServiceId_whenUnmappedInstancesPresent() {
+      // Arrange — three unmapped triplets, all collapse to the unknown VS
+      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      List<NormalizedIntegration> instances =
+          List.of(
+              NormalizedIntegrationFixtures.iconInstance(
+                  "c_1", "new-product-a", IntegrationStatus.HEALTHY),
+              NormalizedIntegrationFixtures.iconInstance(
+                  "c_2", "new-product-b", IntegrationStatus.WARNING),
+              NormalizedIntegrationFixtures.iconInstance(
+                  "c_3", "new-product-c", IntegrationStatus.ERROR));
+
+      // Act
+      Optional<VendorServiceDetail> result =
+          aggregatorWith(snapshot).toVendorServiceDetail("unknown", instances);
+
+      // Assert — synthetic VS with three distinct DSes; aggregateHealth = ERROR
+      assertThat(result).isPresent();
+      VendorServiceDetail detail = result.get();
+      assertThat(detail.vendorServiceId()).isEqualTo("unknown");
+      assertThat(detail.dataSources()).hasSize(3);
+      assertThat(detail.aggregateHealth()).isEqualTo(IntegrationStatus.ERROR);
+      // Each DS preserves its raw triplet in data_source_id and uses sourceValue as displayName
+      assertThat(detail.dataSources())
+          .extracting(DataSourceDetail::dataSourceId)
+          .containsExactlyInAnyOrder(
+              "insightconnect|plugin_name|new-product-a",
+              "insightconnect|plugin_name|new-product-b",
+              "insightconnect|plugin_name|new-product-c");
+      assertThat(detail.dataSources())
+          .extracting(DataSourceDetail::displayName)
+          .containsExactlyInAnyOrder("new-product-a", "new-product-b", "new-product-c");
     }
   }
 }

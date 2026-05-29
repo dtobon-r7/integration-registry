@@ -90,8 +90,18 @@ public final class VendorAggregator {
       String vendorServiceId, List<NormalizedIntegration> instances) {
     Objects.requireNonNull(vendorServiceId, "vendorServiceId");
     Objects.requireNonNull(instances, FIELD_INSTANCES);
-    // Implemented in a later task.
-    return Optional.empty();
+    if (instances.isEmpty()) {
+      return Optional.empty();
+    }
+    List<ResolvedInstance> resolved = resolveAll(instances);
+    List<ResolvedInstance> scoped =
+        resolved.stream()
+            .filter(r -> vendorServiceId.equals(r.resolution().vendorServiceId()))
+            .toList();
+    if (scoped.isEmpty()) {
+      return Optional.empty();
+    }
+    return Optional.of(buildVendorServiceDetail(scoped));
   }
 
   // ----- resolution pass -----
@@ -247,6 +257,65 @@ public final class VendorAggregator {
         .map(r -> r.instance().status())
         .reduce(HealthRollup::worstOf)
         .orElseThrow();
+  }
+
+  // ----- vendor-service detail -----
+
+  private VendorServiceDetail buildVendorServiceDetail(List<ResolvedInstance> group) {
+    VendorResolution r = group.get(0).resolution();
+    Map<String, List<ResolvedInstance>> byDataSourceId = groupByDataSourceId(group);
+    List<DataSourceDetail> dataSources = new ArrayList<>(byDataSourceId.size());
+    for (List<ResolvedInstance> dsGroup : byDataSourceId.values()) {
+      dataSources.add(buildDataSourceDetail(dsGroup));
+    }
+    IntegrationStatus aggregate =
+        dataSources.stream()
+            .map(DataSourceDetail::status)
+            .reduce(HealthRollup::worstOf)
+            .orElseThrow();
+    return new VendorServiceDetail(
+        r.vendorServiceId(),
+        r.vendorServiceName(),
+        r.vendorId(),
+        r.vendorName(),
+        r.vendorCategory(),
+        group.size(),
+        integrationTypeCounts(group),
+        productsConnected(group),
+        aggregate,
+        latestSuccess(group),
+        dataSources);
+  }
+
+  // Per-element projection record allocation, not a lazy bucket — same fundamental pattern as
+  // the lazy-bucket sites: per-element record minting that cannot be hoisted out of the loop
+  // without changing the projection semantics. Reuses the existing constant for symmetry with
+  // the four other suppression sites in this class.
+  @SuppressWarnings(SUPPRESS_LAZY_BUCKET_ALLOC)
+  private static DataSourceDetail buildDataSourceDetail(List<ResolvedInstance> dsGroup) {
+    ResolvedInstance first = dsGroup.get(0);
+    NormalizedIntegration firstInstance = first.instance();
+    IntegrationStatus status = dataSourceStatus(dsGroup);
+    List<IntegrationDetail> integrations = new ArrayList<>(dsGroup.size());
+    for (ResolvedInstance r : dsGroup) {
+      NormalizedIntegration n = r.instance();
+      integrations.add(
+          new IntegrationDetail(
+              n.integrationId(),
+              r.dataSourceId(),
+              n.integrationLabel(),
+              n.status(),
+              n.lastSuccessTimestamp(),
+              n.configurationUrl()));
+    }
+    return new DataSourceDetail(
+        first.dataSourceId(),
+        first.displayName(),
+        firstInstance.integrationType(),
+        firstInstance.productName(),
+        status,
+        integrations.size(),
+        integrations);
   }
 
   // ----- vendor cards -----
