@@ -4,6 +4,6 @@ import jakarta.servlet.http.HttpServletRequest;
 
 class ServiceWithHttpDependency {
 
-    @SuppressWarnings("unused")
-    private HttpServletRequest illegal;
+  @SuppressWarnings("unused")
+  private HttpServletRequest illegal;
 }

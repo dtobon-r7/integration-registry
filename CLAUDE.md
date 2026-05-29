@@ -90,9 +90,14 @@ See [TESTING.md](TESTING.md).
 |------|------|----------|
 | Architecture | ArchUnit | Layer boundary violations (RFC-001) |
 | Code quality | PMD | Rule violations in `pmd-ruleset.xml` |
+| Formatting | Spotless / Google Java Format | Any `.java` file not formatted to GJF style |
 
 **PMD ruleset provenance**: Curated from scratch targeting LLM/agentic development failure modes — empty catch blocks, hallucination residue (unused code), structural bloat, placeholder leftovers. Not pulled from another platform service (none had PMD configured).
 
 **Versions**: maven-pmd-plugin 3.28.0; PMD engine pinned to `pmd-core` + `pmd-java` 7.17.0 in the plugin's `<dependencies>`. `<targetJdk>` flows from the project-level `${java.version}` property.
 
 **Suppressing a rule**: Annotate the specific method with `@SuppressWarnings("PMD.<RuleName>")`. Keep suppressions local and justified.
+
+**Fixing a Spotless violation**: Run `./mvnw spotless:apply` to auto-reformat all `.java` files in place, then re-run `./mvnw verify`. Do not hand-edit to match GJF output — the formatter is authoritative.
+
+**Versions**: spotless-maven-plugin 3.5.1; googleJavaFormat 1.28.0 (Java 25 compatible).
