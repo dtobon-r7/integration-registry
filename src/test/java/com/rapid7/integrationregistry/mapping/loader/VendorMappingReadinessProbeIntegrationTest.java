@@ -62,6 +62,11 @@ class VendorMappingReadinessProbeIntegrationTest {
         registry.add("integration-registry.vendor-mapping.cache-dir", () -> cacheDir.toString());
         // /actuator/health groups expose component details only when show-details is enabled.
         registry.add("management.endpoint.health.show-details", () -> "always");
+        // InsightConnect adapter properties are required (no defaults) and bound at context
+        // startup; supply them so the full application context loads. This test does not
+        // exercise the ICON adapter.
+        registry.add("integration-registry.insightconnect.base-url", () -> "http://icon.test.local");
+        registry.add("integration-registry.insightconnect.icon-base", () -> "http://icon.test.local");
     }
 
     @MockitoBean

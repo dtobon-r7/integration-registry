@@ -69,6 +69,11 @@ class VendorMappingBootIntegrationTest {
         registry.add("integration-registry.vendor-mapping.s3-bucket", () -> "test-bucket");
         registry.add("integration-registry.vendor-mapping.s3-key-prefix", () -> "registry/mappings/");
         registry.add("integration-registry.vendor-mapping.cache-dir", () -> sharedTempDir.toString());
+        // InsightConnect adapter properties are required (no defaults) and bound at context
+        // startup; supply them so the full application context loads. This test does not
+        // exercise the ICON adapter.
+        registry.add("integration-registry.insightconnect.base-url", () -> "http://icon.test.local");
+        registry.add("integration-registry.insightconnect.icon-base", () -> "http://icon.test.local");
     }
 
     @MockitoBean
