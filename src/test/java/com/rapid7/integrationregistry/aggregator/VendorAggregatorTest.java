@@ -80,5 +80,92 @@ class VendorAggregatorTest {
       assertThat(card.aggregateHealth()).isEqualTo(IntegrationStatus.HEALTHY);
       assertThat(appender.list).isEmpty();
     }
+
+    @Test
+    void toVendorServiceCards_shouldEmitSyntheticCard_whenSnapshotReturnsUnknown() {
+      // Arrange — one ICON instance, snapshot has nothing mapped at all
+      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      NormalizedIntegration instance =
+          NormalizedIntegrationFixtures.iconInstance(
+              "c_1", "new-product-x", IntegrationStatus.HEALTHY);
+
+      // Act
+      List<VendorServiceCard> cards =
+          aggregatorWith(snapshot).toVendorServiceCards(List.of(instance));
+
+      // Assert — synthetic VS card with the canonical unknown identity
+      assertThat(cards).hasSize(1);
+      VendorServiceCard card = cards.get(0);
+      assertThat(card.vendorServiceId()).isEqualTo("unknown");
+      assertThat(card.vendorServiceName()).isEqualTo("Unknown");
+      assertThat(card.vendorId()).isEqualTo("unknown");
+      assertThat(card.vendorName()).isEqualTo("Unknown");
+      assertThat(card.vendorCategory()).isEqualTo(VendorCategory.OTHER);
+      assertThat(appender.list).hasSize(1);
+      assertThat(appender.list.get(0).getLevel().toString()).isEqualTo("WARN");
+      assertThat(appender.list.get(0).getFormattedMessage())
+          .contains("InsightConnect")
+          .contains("plugin_name")
+          .contains("new-product-x")
+          .contains(MAPPING_VERSION);
+    }
+
+    @Test
+    void toVendorServiceCards_shouldRouteToUnknownPath_whenProductNameStringIsUnmappable() {
+      // Arrange — adapter wrote a productName string that isn't a ProductName enum value.
+      // Spec ruling Q1.1: fold into unknown-collapse path with WARN.
+      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      NormalizedIntegration instance =
+          NormalizedIntegrationFixtures.instance(
+              "MysteryProduct",
+              "product_type",
+              "weird-source",
+              "Unknown Type",
+              IntegrationStatus.WARNING,
+              "i_1",
+              null);
+
+      // Act
+      List<VendorServiceCard> cards =
+          aggregatorWith(snapshot).toVendorServiceCards(List.of(instance));
+
+      // Assert — synthetic card; WARN content carries the raw values
+      assertThat(cards).hasSize(1);
+      assertThat(cards.get(0).vendorServiceId()).isEqualTo("unknown");
+      assertThat(appender.list).hasSize(1);
+      assertThat(appender.list.get(0).getFormattedMessage())
+          .contains("MysteryProduct")
+          .contains("product_type")
+          .contains("weird-source")
+          .contains(MAPPING_VERSION);
+    }
+
+    @Test
+    void toVendorServiceCards_shouldRouteToUnknownPath_whenSourceTypeStringIsUnmappable() {
+      // Arrange — productName is canonical, sourceType is junk.
+      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      NormalizedIntegration instance =
+          NormalizedIntegrationFixtures.instance(
+              "InsightIDR",
+              "future_source_type",
+              "x",
+              "SIEM Event Source",
+              IntegrationStatus.HEALTHY,
+              "es_1",
+              null);
+
+      // Act
+      List<VendorServiceCard> cards =
+          aggregatorWith(snapshot).toVendorServiceCards(List.of(instance));
+
+      // Assert — synthetic, single WARN with the raw sourceType in the message
+      assertThat(cards).hasSize(1);
+      assertThat(cards.get(0).vendorServiceId()).isEqualTo("unknown");
+      assertThat(appender.list).hasSize(1);
+      assertThat(appender.list.get(0).getFormattedMessage())
+          .contains("InsightIDR")
+          .contains("future_source_type")
+          .contains(MAPPING_VERSION);
+    }
   }
 }
