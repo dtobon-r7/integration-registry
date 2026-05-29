@@ -15,6 +15,12 @@ import org.springframework.web.client.RestClient;
  * <p>The builder is configured then built here; contract tests construct their
  * own builder and bind a {@code MockRestServiceServer} to it (see
  * {@code InsightConnectAdapterContractTest}).
+ *
+ * <p>{@link ConnectionStatusMapper} is exposed as a {@code @Bean} here rather
+ * than carrying a {@code @Component} annotation — it is pure logic with no
+ * Spring dependency, and registering it via configuration keeps it
+ * framework-free (mirrors how {@code VendorMappingConfiguration} declares
+ * {@code BundleParser}). {@link InsightConnectAdapter} autowires it.
  */
 @Configuration
 @EnableConfigurationProperties(InsightConnectProperties.class)
@@ -29,5 +35,10 @@ public class InsightConnectClientConfig {
             .baseUrl(properties.baseUrl())
             .requestFactory(requestFactory)
             .build();
+    }
+
+    @Bean
+    public ConnectionStatusMapper connectionStatusMapper() {
+        return new ConnectionStatusMapper();
     }
 }

@@ -4,7 +4,6 @@ import com.rapid7.integrationregistry.adapter.FetchResult;
 import com.rapid7.integrationregistry.adapter.IntegrationStatus;
 import com.rapid7.integrationregistry.adapter.NormalizedIntegration;
 import com.rapid7.integrationregistry.adapter.exception.AdapterAuthException;
-import com.rapid7.integrationregistry.adapter.exception.AdapterTimeoutException;
 import com.rapid7.integrationregistry.adapter.exception.AdapterUpstreamException;
 import com.rapid7.integrationregistry.testsupport.FixtureLoader;
 import org.junit.jupiter.api.Test;

@@ -10,7 +10,11 @@ import com.rapid7.integrationregistry.adapter.exception.AdapterTimeoutException;
 import com.rapid7.integrationregistry.adapter.exception.AdapterUpstreamException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 import java.time.Instant;
 import java.util.List;
@@ -68,29 +72,38 @@ public class InsightConnectAdapter implements IntegrationAdapter {
         try {
             return restClient.get()
                 .uri(CONNECTIONS_PATH)
-                // TODO(T10): replace hand-rolled identity-header forwarding with
-                // the canonical Class3HeaderAttacher once track 10 lands.
+                // T10 integration point: hand-rolled identity-header forwarding for now;
+                // swap for the canonical Class3HeaderAttacher once track 10 lands.
                 .headers(h -> h.addAll(authHeaders))
                 .retrieve()
                 .body(ConnectionsResponse.class);
-        } catch (org.springframework.web.client.HttpClientErrorException e) {
-            if (e.getStatusCode().value() == 401 || e.getStatusCode().value() == 403) {
-                throw new AdapterAuthException(
-                    "InsightConnect auth failure: " + e.getStatusCode(), e);
-            }
-            throw new AdapterUpstreamException(
-                "InsightConnect 4xx: " + e.getStatusCode(), e);
-        } catch (org.springframework.web.client.HttpServerErrorException e) {
-            throw new AdapterUpstreamException(
-                "InsightConnect 5xx: " + e.getStatusCode(), e);
-        } catch (org.springframework.web.client.ResourceAccessException e) {
+        } catch (HttpClientErrorException e) {
+            throwClientError(e);
+            return null; // unreachable: throwClientError always throws
+        } catch (HttpServerErrorException e) {
+            throw new AdapterUpstreamException("InsightConnect 5xx: " + e.getStatusCode(), e);
+        } catch (ResourceAccessException e) {
             throw new AdapterTimeoutException(
                 "InsightConnect request failed (timeout/transport): " + e.getMessage(), e);
-        } catch (org.springframework.web.client.RestClientException e) {
-            // Body unparseable or other client-side failure — treat as upstream-broken.
+        } catch (RestClientException e) {
+            // Any other client-side failure (e.g. unparseable body) — upstream-broken.
             throw new AdapterUpstreamException(
                 "InsightConnect response could not be processed: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Map a 4xx to the matching adapter exception, preserving the cause: 401/403
+     * are auth failures; every other 4xx is treated as upstream-broken (the
+     * contract exposes no distinct 4xx signal). Always throws.
+     */
+    private static void throwClientError(HttpClientErrorException e)
+            throws AdapterAuthException, AdapterUpstreamException {
+        int code = e.getStatusCode().value();
+        if (code == 401 || code == 403) {
+            throw new AdapterAuthException("InsightConnect auth failure: " + e.getStatusCode(), e);
+        }
+        throw new AdapterUpstreamException("InsightConnect 4xx: " + e.getStatusCode(), e);
     }
 
     private NormalizedIntegration normalize(ConnectionViewModel cvm, String orgId) {

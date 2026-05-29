@@ -38,38 +38,55 @@ public class ConnectionStatusMapper {
      * with a WARN log — one anomalous connection must not fail the fetch.
      */
     public IntegrationStatus deriveStatus(String orchestratorStatus, ConnectionTest mostRecentTest) {
-        boolean stale = mostRecentTest != null && Boolean.TRUE.equals(mostRecentTest.isStale());
-        String testStatus = mostRecentTest == null ? null : mostRecentTest.status();
-
-        // 1. error
-        if (TEST_FAILED.equals(testStatus) || TEST_TIMEOUT.equals(testStatus)
-                || ORCH_ERROR.equals(orchestratorStatus)) {
+        // First match wins, in precedence order: error > missing_data > warning > disabled > healthy.
+        if (isErrorState(orchestratorStatus, mostRecentTest)) {
             return IntegrationStatus.ERROR;
         }
-        // 2. missing_data (stale test or unknown orchestrator)
-        if (stale || ORCH_UNKNOWN.equals(orchestratorStatus)) {
+        if (isMissingDataState(orchestratorStatus, mostRecentTest)) {
             return IntegrationStatus.MISSING_DATA;
         }
-        // 3. warning
         if (ORCH_WARNING.equals(orchestratorStatus)) {
             return IntegrationStatus.WARNING;
         }
-        // 4. disabled
         if (ORCH_STOPPED.equals(orchestratorStatus)) {
             return IntegrationStatus.DISABLED;
         }
-        // 5. healthy (requires a confirming successful, non-stale test)
-        if (ORCH_HEALTHY.equals(orchestratorStatus)
-                && TEST_SUCCESS.equals(testStatus)) {
+        if (isHealthyState(orchestratorStatus, mostRecentTest)) {
             return IntegrationStatus.HEALTHY;
         }
-        // 6. missing_data tail: healthy orchestrator with no confirming test,
-        //    or any unrecognized / null orchestrator value.
+        // Tail: healthy orchestrator with no confirming test, or any unrecognized /
+        // null orchestrator value. Only the latter is genuinely anomalous, so only
+        // it is logged.
         if (!ORCH_HEALTHY.equals(orchestratorStatus)) {
             log.warn("Unrecognized ICON orchestrator status '{}'; mapping to missing_data",
                      orchestratorStatus);
         }
         return IntegrationStatus.MISSING_DATA;
+    }
+
+    /** A failed/timeout test or an {@code error} orchestrator. */
+    private static boolean isErrorState(String orchestratorStatus, ConnectionTest test) {
+        String testStatus = test == null ? null : test.status();
+        return TEST_FAILED.equals(testStatus)
+            || TEST_TIMEOUT.equals(testStatus)
+            || ORCH_ERROR.equals(orchestratorStatus);
+    }
+
+    /** A stale test or an {@code unknown} orchestrator — the two RFC {@code missing_data} triggers. */
+    private static boolean isMissingDataState(String orchestratorStatus, ConnectionTest test) {
+        boolean stale = test != null && Boolean.TRUE.equals(test.isStale());
+        return stale || ORCH_UNKNOWN.equals(orchestratorStatus);
+    }
+
+    /**
+     * A {@code healthy} orchestrator confirmed by a successful test. Staleness is
+     * not re-checked here — a stale test resolves to {@code missing_data} earlier
+     * via {@link #isMissingDataState}, so it never reaches this rule.
+     */
+    private static boolean isHealthyState(String orchestratorStatus, ConnectionTest test) {
+        return ORCH_HEALTHY.equals(orchestratorStatus)
+            && test != null
+            && TEST_SUCCESS.equals(test.status());
     }
 
     /**
