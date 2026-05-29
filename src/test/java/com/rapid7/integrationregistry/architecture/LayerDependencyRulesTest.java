@@ -35,4 +35,8 @@ class LayerDependencyRulesTest {
     @ArchTest
     static final ArchRule mappingCoreLayer_shouldNotDependOnFrameworks =
             LayerDependencyRules.mappingCoreLayer_shouldNotDependOnFrameworks;
+
+    @ArchTest
+    static final ArchRule adapterExceptions_shouldExtendAdapterExceptionParent =
+            LayerDependencyRules.adapterExceptions_shouldExtendAdapterExceptionParent;
 }

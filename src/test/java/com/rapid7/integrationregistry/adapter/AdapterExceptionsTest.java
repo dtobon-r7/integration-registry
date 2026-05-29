@@ -1,8 +1,11 @@
 package com.rapid7.integrationregistry.adapter;
 
 import com.rapid7.integrationregistry.adapter.exception.AdapterAuthException;
+import com.rapid7.integrationregistry.adapter.exception.AdapterException;
 import com.rapid7.integrationregistry.adapter.exception.AdapterTimeoutException;
 import com.rapid7.integrationregistry.adapter.exception.AdapterUpstreamException;
+import com.rapid7.integrationregistry.mapping.exception.BundleLoadException;
+import com.rapid7.integrationregistry.mapping.exception.BundleParseException;
 import org.junit.jupiter.api.Test;
 
 import java.util.function.BiFunction;
@@ -46,14 +49,20 @@ class AdapterExceptionsTest {
     }
 
     @Test
-    void independentlyCatchable_shouldDistinguishEachType_whenThrownInSeparateBlocks() {
-        // Arrange
-        // Each block throws one type and catches that exact type, then asserts the
-        // caught instance is NOT one of the other two. If a future refactor made one
-        // type inherit from another (or introduced a shared parent above Exception),
-        // the negative isNotInstanceOf assertions would fail.
+    void parentClass_shouldBeAdapterException_forAllConcreteSubclasses() {
+        AdapterAuthException auth = new AdapterAuthException("auth");
+        AdapterTimeoutException timeout = new AdapterTimeoutException("timeout");
+        AdapterUpstreamException upstream = new AdapterUpstreamException("upstream");
 
-        // Act + Assert — Timeout
+        assertThat(auth.getClass().getSuperclass()).isEqualTo(AdapterException.class);
+        assertThat(timeout.getClass().getSuperclass()).isEqualTo(AdapterException.class);
+        assertThat(upstream.getClass().getSuperclass()).isEqualTo(AdapterException.class);
+    }
+
+    @Test
+    void independentlyCatchable_shouldDistinguishEachType_whenThrownInSeparateBlocks() {
+        // Sibling distinctness: a future refactor making one sibling inherit
+        // from another would break the negative isNotInstanceOf assertions.
         try {
             throw new AdapterTimeoutException("timeout");
         } catch (AdapterTimeoutException caught) {
@@ -62,7 +71,6 @@ class AdapterExceptionsTest {
                     .isNotInstanceOf(AdapterUpstreamException.class);
         }
 
-        // Act + Assert — Auth
         try {
             throw new AdapterAuthException("auth");
         } catch (AdapterAuthException caught) {
@@ -71,7 +79,6 @@ class AdapterExceptionsTest {
                     .isNotInstanceOf(AdapterUpstreamException.class);
         }
 
-        // Act + Assert — Upstream
         try {
             throw new AdapterUpstreamException("upstream");
         } catch (AdapterUpstreamException caught) {
@@ -79,6 +86,68 @@ class AdapterExceptionsTest {
                     .isNotInstanceOf(AdapterTimeoutException.class)
                     .isNotInstanceOf(AdapterAuthException.class);
         }
+    }
+
+    @Test
+    void familyIndependence_shouldNotBeBundleException_whenAdapterExceptionThrown() {
+        AdapterException caught = new AdapterAuthException("auth");
+        assertThat(caught)
+            .isNotInstanceOf(BundleParseException.class)
+            .isNotInstanceOf(BundleLoadException.class);
+    }
+
+    @Test
+    void isTransient_shouldReturnFalse_whenAdapterAuthExceptionThrown() {
+        // Arrange
+        AdapterAuthException ex = new AdapterAuthException("401");
+
+        // Act / Assert
+        assertThat(ex.isTransient()).isFalse();
+    }
+
+    @Test
+    void isTransient_shouldReturnTrue_whenAdapterTimeoutExceptionThrown() {
+        // Arrange
+        AdapterTimeoutException ex = new AdapterTimeoutException("read timeout");
+
+        // Act / Assert
+        assertThat(ex.isTransient()).isTrue();
+    }
+
+    @Test
+    void isTransient_shouldReturnTrue_whenAdapterUpstreamExceptionThrown() {
+        // Arrange
+        AdapterUpstreamException ex = new AdapterUpstreamException("503");
+
+        // Act / Assert
+        assertThat(ex.isTransient()).isTrue();
+    }
+
+    @Test
+    void reasonCode_shouldReturnAuthFailure_whenAdapterAuthExceptionThrown() {
+        // Arrange
+        AdapterAuthException ex = new AdapterAuthException("401");
+
+        // Act / Assert
+        assertThat(ex.reasonCode()).isEqualTo("auth_failure");
+    }
+
+    @Test
+    void reasonCode_shouldReturnTimeout_whenAdapterTimeoutExceptionThrown() {
+        // Arrange
+        AdapterTimeoutException ex = new AdapterTimeoutException("read timeout");
+
+        // Act / Assert
+        assertThat(ex.reasonCode()).isEqualTo("timeout");
+    }
+
+    @Test
+    void reasonCode_shouldReturnUpstream5xx_whenAdapterUpstreamExceptionThrown() {
+        // Arrange
+        AdapterUpstreamException ex = new AdapterUpstreamException("503");
+
+        // Act / Assert
+        assertThat(ex.reasonCode()).isEqualTo("upstream_5xx");
     }
 
     private static void assertMessageRoundTrip(Function<String, ? extends Exception> ctor, String message) {

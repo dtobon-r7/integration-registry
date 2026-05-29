@@ -10,13 +10,12 @@ import java.util.Optional;
  * entry built from {@link #getMessage()}, the cause, and {@link #path()} when
  * present.
  *
- * <p>This is the <em>payload-style</em> exception per ADR-001: the structured
- * payload here is the optional {@link #path()} (populated for cache I/O
- * failures), and the underlying {@link Throwable} cause discriminates the
- * remaining failure modes via the named static factories. Contrast with the
- * <em>marker-style</em> adapter exceptions in
- * {@code com.rapid7.integrationregistry.adapter.exception} which carry only
- * message and cause. See ADR-001 for the convention.
+ * <p>Payload-style exception per ADR-001: the structured payload is the
+ * optional {@link #path()} (populated for cache I/O failures); the
+ * underlying {@link Throwable} cause discriminates the remaining failure
+ * modes via the named static factories. See the package Javadoc
+ * ({@link com.rapid7.integrationregistry.mapping.exception}) for the
+ * family's no-parent rule.
  */
 public class BundleLoadException extends Exception {
 

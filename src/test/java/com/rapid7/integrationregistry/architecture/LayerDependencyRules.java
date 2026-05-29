@@ -1,7 +1,11 @@
 package com.rapid7.integrationregistry.architecture;
 
+import com.rapid7.integrationregistry.adapter.exception.AdapterException;
+import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.lang.ArchRule;
 
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 final class LayerDependencyRules {
@@ -40,6 +44,15 @@ final class LayerDependencyRules {
                     .and().resideOutsideOfPackages("..mapping.loader..", "..mapping.exception..")
                     .should().dependOnClassesThat().resideInAnyPackage(
                             "org.springframework..", "software.amazon.awssdk..");
+
+    static final ArchRule adapterExceptions_shouldExtendAdapterExceptionParent =
+            classes().that().resideInAPackage("..adapter.exception..")
+                    .and().areNotInterfaces()
+                    .and(DescribedPredicate.not(JavaClass.Predicates.type(AdapterException.class)))
+                    .should().beAssignableTo(AdapterException.class)
+                    .because("ADR-001: every concrete class in adapter.exception must extend "
+                            + "AdapterException (the family parent). The abstract parent itself "
+                            + "is excluded.");
 
     private LayerDependencyRules() {}
 }

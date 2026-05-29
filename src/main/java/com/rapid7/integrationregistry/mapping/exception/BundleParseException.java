@@ -6,22 +6,22 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Thrown by {@link BundleParser#parse} when the input cannot be parsed as YAML
- * or when the parsed document fails JSON Schema validation. Caught by the
- * bundle's boot-time loader, which maps it to a readiness-probe-down state
- * plus a structured log entry built from {@link #validationMessages()}.
+ * Thrown by {@link com.rapid7.integrationregistry.mapping.BundleParser#parse}
+ * when the input cannot be parsed as YAML or when the parsed document fails
+ * JSON Schema validation. Caught by the bundle's boot-time loader, which maps
+ * it to a readiness-probe-down state plus a structured log entry built from
+ * {@link #validationMessages()}.
  *
  * <p>For YAML syntax failures, the underlying Jackson exception is the cause
  * and {@link #validationMessages()} is empty. For schema-validation failures,
  * the cause is null and {@link #validationMessages()} carries the structured
  * messages from the validator.
  *
- * <p>This is the <em>payload-style</em> exception in the registry's exception
- * convention: structured data on the failure (the validation messages) is
- * accessible via the dedicated accessor, while the human-readable summary is
- * available via {@link #getMessage()}. Contrast with the <em>marker-style</em>
- * adapter exceptions in {@code com.rapid7.integrationregistry.adapter.exception}
- * which carry only message and cause. See ADR-001 for the convention.
+ * <p>Payload-style exception per ADR-001: structured data on the failure
+ * (the validation messages) is accessible via the dedicated accessor; the
+ * human-readable summary is available via {@link #getMessage()}. See the
+ * package Javadoc ({@link com.rapid7.integrationregistry.mapping.exception})
+ * for the family's no-parent rule.
  */
 public class BundleParseException extends Exception {
 
