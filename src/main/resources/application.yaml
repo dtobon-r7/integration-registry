@@ -23,6 +23,10 @@ integration-registry:
     cache-dir: ${java.io.tmpdir}/integration-registry/vendor-mapping
     # bundle-version, s3-bucket, s3-key-prefix come from the deploy environment.
     # Absent here so missing config fails fast at property binding (no stale defaults).
+  insightconnect:
+    # base-url and icon-base come from the deploy environment (no defaults —
+    # absent config fails fast at binding).
+    timeout: 5s
 
 ---
 spring:

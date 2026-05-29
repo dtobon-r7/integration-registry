@@ -1,3 +1,8 @@
-# Test profile config. Empty by design — entries land here only when
-# tests need profile-driven config that diverges from local/staging/production.
+# Test profile config. Entries land here only when tests need profile-driven
+# config that diverges from local/staging/production.
 # Activate via @ActiveProfiles("test") on the test class.
+integration-registry:
+  insightconnect:
+    base-url: http://icon.test.local
+    icon-base: http://icon.test.local
+    timeout: 1s

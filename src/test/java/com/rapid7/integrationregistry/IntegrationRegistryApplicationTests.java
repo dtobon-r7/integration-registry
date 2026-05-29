@@ -40,6 +40,10 @@ class IntegrationRegistryApplicationTests {
         registry.add("integration-registry.vendor-mapping.s3-bucket", () -> "test-bucket");
         registry.add("integration-registry.vendor-mapping.s3-key-prefix", () -> "test/mappings/");
         registry.add("integration-registry.vendor-mapping.cache-dir", () -> cacheDir.toString());
+        // InsightConnect base-url/icon-base have no defaults (fail-fast at binding);
+        // supply test values here, mirroring the vendor-mapping required props above.
+        registry.add("integration-registry.insightconnect.base-url", () -> "http://icon.test.local");
+        registry.add("integration-registry.insightconnect.icon-base", () -> "http://icon.test.local");
     }
 
     @MockitoBean
