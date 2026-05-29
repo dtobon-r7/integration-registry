@@ -356,4 +356,78 @@ class VendorAggregatorTest {
           .containsExactlyInAnyOrder("InsightIDR", "InsightConnect");
     }
   }
+
+  @Nested
+  class VendorCardsTest {
+
+    @Test
+    void toVendorCards_shouldEmitOneCardPerDistinctVendor_withVendorServicesCount() {
+      // Arrange — two Microsoft services (Defender + Sentinel) plus one Atlassian (Jira).
+      // Microsoft has 2 vendor services; Atlassian has 1.
+      VendorResolution msSentinel =
+          new VendorResolution(
+              "microsoft-sentinel",
+              "Microsoft Sentinel",
+              VendorCategory.SIEM,
+              "microsoft",
+              "Microsoft");
+      VendorResolution jira =
+          new VendorResolution("jira", "Jira", VendorCategory.ITSM, "atlassian", "Atlassian");
+
+      VendorMappingSnapshot snapshot =
+          FakeVendorMappingSnapshot.with(MAPPING_VERSION)
+              .map(
+                  ProductName.INSIGHT_IDR,
+                  SourceType.PRODUCT_TYPE,
+                  "microsoft-defender-endpoint",
+                  MS_DEFENDER)
+              .map(
+                  ProductName.INSIGHT_IDR,
+                  SourceType.PRODUCT_TYPE,
+                  "microsoft-sentinel",
+                  msSentinel)
+              .map(ProductName.INSIGHT_CONNECT, SourceType.PLUGIN_NAME, "jira", jira)
+              .build();
+
+      List<NormalizedIntegration> instances =
+          List.of(
+              NormalizedIntegrationFixtures.idrInstance(
+                  "es_1", "microsoft-defender-endpoint", IntegrationStatus.HEALTHY),
+              NormalizedIntegrationFixtures.idrInstance(
+                  "es_2", "microsoft-sentinel", IntegrationStatus.HEALTHY),
+              NormalizedIntegrationFixtures.iconInstance("c_1", "jira", IntegrationStatus.HEALTHY));
+
+      // Act
+      List<VendorCard> vendors = aggregatorWith(snapshot).toVendorCards(instances);
+
+      // Assert
+      assertThat(vendors).hasSize(2);
+      VendorCard microsoft =
+          vendors.stream().filter(v -> v.vendorId().equals("microsoft")).findFirst().orElseThrow();
+      VendorCard atlassian =
+          vendors.stream().filter(v -> v.vendorId().equals("atlassian")).findFirst().orElseThrow();
+      assertThat(microsoft.vendorName()).isEqualTo("Microsoft");
+      assertThat(microsoft.vendorServicesCount()).isEqualTo(2);
+      assertThat(atlassian.vendorName()).isEqualTo("Atlassian");
+      assertThat(atlassian.vendorServicesCount()).isEqualTo(1);
+    }
+
+    @Test
+    void toVendorCards_shouldEmitSyntheticUnknownVendor_whenUnmappedTripletPresent() {
+      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      List<NormalizedIntegration> instances =
+          List.of(
+              NormalizedIntegrationFixtures.iconInstance(
+                  "c_1", "new-product", IntegrationStatus.HEALTHY));
+
+      // Act
+      List<VendorCard> vendors = aggregatorWith(snapshot).toVendorCards(instances);
+
+      // Assert — single synthetic vendor card with vendorServicesCount=1
+      assertThat(vendors).hasSize(1);
+      assertThat(vendors.get(0).vendorId()).isEqualTo("unknown");
+      assertThat(vendors.get(0).vendorName()).isEqualTo("Unknown");
+      assertThat(vendors.get(0).vendorServicesCount()).isEqualTo(1);
+    }
+  }
 }

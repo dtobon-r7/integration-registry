@@ -52,6 +52,8 @@ public final class VendorAggregator {
 
   private static final String FIELD_INSTANCES = "instances";
 
+  private static final String SUPPRESS_LAZY_BUCKET_ALLOC = "PMD.AvoidInstantiatingObjectsInLoops";
+
   private final VendorMappingSnapshot snapshot;
 
   public VendorAggregator(VendorMappingSnapshot snapshot) {
@@ -69,12 +71,11 @@ public final class VendorAggregator {
 
   public List<VendorCard> toVendorCards(List<NormalizedIntegration> instances) {
     Objects.requireNonNull(instances, FIELD_INSTANCES);
-    // Implemented in a later task. Returning an empty list keeps the public
-    // surface compilable for tests that only exercise toVendorServiceCards.
     if (instances.isEmpty()) {
       return List.of();
     }
-    return List.of();
+    List<ResolvedInstance> resolved = resolveAll(instances);
+    return buildVendorCards(resolved);
   }
 
   public Optional<VendorScopedView> toVendorScopedView(
@@ -152,7 +153,7 @@ public final class VendorAggregator {
   // Per-vendor-service buckets are minted lazily via computeIfAbsent — one ArrayList per
   // distinct vendorServiceId, never per iteration. Hoisting the allocation outside the loop
   // would defeat the grouping.
-  @SuppressWarnings("PMD.AvoidInstantiatingObjectsInLoops")
+  @SuppressWarnings(SUPPRESS_LAZY_BUCKET_ALLOC)
   private List<VendorServiceCard> buildVendorServiceCards(List<ResolvedInstance> resolved) {
     Map<String, List<ResolvedInstance>> byVendorServiceId = new LinkedHashMap<>();
     for (ResolvedInstance r : resolved) {
@@ -191,7 +192,7 @@ public final class VendorAggregator {
   // computeIfAbsent mints one int[2] counter array per distinct integrationType — never per
   // iteration. Hoisting the allocation outside the loop would defeat the grouping; the same
   // pattern is used in groupByDataSourceId and buildVendorServiceCards above.
-  @SuppressWarnings("PMD.AvoidInstantiatingObjectsInLoops")
+  @SuppressWarnings(SUPPRESS_LAZY_BUCKET_ALLOC)
   private static List<IntegrationTypeCount> integrationTypeCounts(List<ResolvedInstance> group) {
     Map<String, int[]> totals = new LinkedHashMap<>();
     for (ResolvedInstance r : group) {
@@ -231,7 +232,7 @@ public final class VendorAggregator {
   // Per-data-source buckets are minted lazily via computeIfAbsent — one ArrayList per
   // distinct dataSourceId, never per iteration. Hoisting the allocation outside the loop
   // would defeat the grouping.
-  @SuppressWarnings("PMD.AvoidInstantiatingObjectsInLoops")
+  @SuppressWarnings(SUPPRESS_LAZY_BUCKET_ALLOC)
   private static Map<String, List<ResolvedInstance>> groupByDataSourceId(
       List<ResolvedInstance> group) {
     Map<String, List<ResolvedInstance>> by = new LinkedHashMap<>();
@@ -246,5 +247,39 @@ public final class VendorAggregator {
         .map(r -> r.instance().status())
         .reduce(HealthRollup::worstOf)
         .orElseThrow();
+  }
+
+  // ----- vendor cards -----
+
+  // Per-vendor accumulators are minted lazily via computeIfAbsent — one VendorAccumulator per
+  // distinct vendorId, never per iteration. Hoisting the allocation outside the loop would
+  // defeat the grouping; the same pattern is used in groupByDataSourceId and
+  // integrationTypeCounts above.
+  @SuppressWarnings(SUPPRESS_LAZY_BUCKET_ALLOC)
+  private static List<VendorCard> buildVendorCards(List<ResolvedInstance> resolved) {
+    // vendorId -> (vendorName, set-of-vendorServiceIds)
+    Map<String, VendorAccumulator> byVendorId = new LinkedHashMap<>();
+    for (ResolvedInstance r : resolved) {
+      VendorResolution res = r.resolution();
+      VendorAccumulator acc =
+          byVendorId.computeIfAbsent(res.vendorId(), k -> new VendorAccumulator(res.vendorName()));
+      acc.vendorServiceIds.add(res.vendorServiceId());
+    }
+    List<VendorCard> cards = new ArrayList<>(byVendorId.size());
+    for (Map.Entry<String, VendorAccumulator> e : byVendorId.entrySet()) {
+      cards.add(
+          new VendorCard(
+              e.getKey(), e.getValue().vendorName, e.getValue().vendorServiceIds.size()));
+    }
+    return cards;
+  }
+
+  private static final class VendorAccumulator {
+    private final String vendorName;
+    private final Set<String> vendorServiceIds = new LinkedHashSet<>();
+
+    private VendorAccumulator(String vendorName) {
+      this.vendorName = vendorName;
+    }
   }
 }
