@@ -13,6 +13,7 @@ import com.rapid7.integrationregistry.mapping.SourceType;
 import com.rapid7.integrationregistry.mapping.VendorCategory;
 import com.rapid7.integrationregistry.mapping.VendorMappingSnapshot;
 import com.rapid7.integrationregistry.mapping.VendorResolution;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -239,6 +240,82 @@ class VendorAggregatorTest {
       assertThat(cards).hasSize(1);
       assertThat(cards.get(0).aggregateHealth()).isEqualTo(IntegrationStatus.WARNING);
       assertThat(cards.get(0).integrationsConnected()).isEqualTo(2);
+    }
+  }
+
+  @Nested
+  class VendorServiceCardsTest {
+
+    private static final Instant T1 = Instant.parse("2026-05-01T10:00:00Z");
+    private static final Instant T2 = Instant.parse("2026-05-15T10:00:00Z");
+    private static final Instant T3 = Instant.parse("2026-05-29T10:00:00Z");
+
+    @Test
+    void toVendorServiceCards_shouldComputePerVendorServiceAggregates() {
+      // Arrange — Microsoft Defender via IDR (2 instances) + ICON (1 instance).
+      // Two distinct integrationTypes; one ERROR; mixed lastSuccess timestamps.
+      VendorMappingSnapshot snapshot =
+          FakeVendorMappingSnapshot.with(MAPPING_VERSION)
+              .map(
+                  ProductName.INSIGHT_IDR,
+                  SourceType.PRODUCT_TYPE,
+                  "microsoft-defender-endpoint",
+                  MS_DEFENDER)
+              .map(
+                  ProductName.INSIGHT_CONNECT,
+                  SourceType.PLUGIN_NAME,
+                  "microsoft-defender",
+                  MS_DEFENDER)
+              .build();
+
+      List<NormalizedIntegration> instances =
+          List.of(
+              NormalizedIntegrationFixtures.idrInstance(
+                  "es_1", "microsoft-defender-endpoint", IntegrationStatus.HEALTHY, T1),
+              NormalizedIntegrationFixtures.idrInstance(
+                  "es_2", "microsoft-defender-endpoint", IntegrationStatus.ERROR, T2),
+              NormalizedIntegrationFixtures.iconInstance(
+                  "c_1", "microsoft-defender", IntegrationStatus.HEALTHY, T3));
+
+      // Act
+      List<VendorServiceCard> cards = aggregatorWith(snapshot).toVendorServiceCards(instances);
+
+      // Assert
+      assertThat(cards).hasSize(1);
+      VendorServiceCard card = cards.get(0);
+      assertThat(card.integrationsConnected()).isEqualTo(3);
+      assertThat(card.lastUpdated()).isEqualTo(T3);
+      assertThat(card.productsConnected()).containsExactly("InsightIDR", "InsightConnect");
+      assertThat(card.integrationTypeCounts())
+          .containsExactlyInAnyOrder(
+              new IntegrationTypeCount("SIEM Event Source", 2, 1),
+              new IntegrationTypeCount("Automation Plugin", 1, 0));
+    }
+
+    @Test
+    void toVendorServiceCards_shouldReturnNullLastUpdated_whenNoInstanceHasTimestamp() {
+      // Arrange — single VS, every instance has null lastSuccessTimestamp
+      VendorMappingSnapshot snapshot =
+          FakeVendorMappingSnapshot.with(MAPPING_VERSION)
+              .map(
+                  ProductName.INSIGHT_IDR,
+                  SourceType.PRODUCT_TYPE,
+                  "microsoft-defender-endpoint",
+                  MS_DEFENDER)
+              .build();
+
+      List<NormalizedIntegration> instances =
+          List.of(
+              NormalizedIntegrationFixtures.idrInstance(
+                  "es_1", "microsoft-defender-endpoint", IntegrationStatus.HEALTHY, null),
+              NormalizedIntegrationFixtures.idrInstance(
+                  "es_2", "microsoft-defender-endpoint", IntegrationStatus.HEALTHY, null));
+
+      // Act
+      List<VendorServiceCard> cards = aggregatorWith(snapshot).toVendorServiceCards(instances);
+
+      // Assert
+      assertThat(cards.get(0).lastUpdated()).isNull();
     }
   }
 }

@@ -6,9 +6,11 @@ import com.rapid7.integrationregistry.mapping.ProductName;
 import com.rapid7.integrationregistry.mapping.SourceType;
 import com.rapid7.integrationregistry.mapping.VendorMappingSnapshot;
 import com.rapid7.integrationregistry.mapping.VendorResolution;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -180,10 +182,50 @@ public final class VendorAggregator {
         r.vendorName(),
         r.vendorCategory(),
         group.size(),
-        List.of(), // integrationTypeCounts — Task 9
-        List.of(), // productsConnected — Task 9
+        integrationTypeCounts(group),
+        productsConnected(group),
         aggregate,
-        null); // lastUpdated — Task 9
+        latestSuccess(group));
+  }
+
+  // computeIfAbsent mints one int[2] counter array per distinct integrationType — never per
+  // iteration. Hoisting the allocation outside the loop would defeat the grouping; the same
+  // pattern is used in groupByDataSourceId and buildVendorServiceCards above.
+  @SuppressWarnings("PMD.AvoidInstantiatingObjectsInLoops")
+  private static List<IntegrationTypeCount> integrationTypeCounts(List<ResolvedInstance> group) {
+    Map<String, int[]> totals = new LinkedHashMap<>();
+    for (ResolvedInstance r : group) {
+      String type = r.instance().integrationType();
+      int[] counts = totals.computeIfAbsent(type, k -> new int[2]);
+      counts[0]++;
+      if (r.instance().status() == IntegrationStatus.ERROR) {
+        counts[1]++;
+      }
+    }
+    List<IntegrationTypeCount> out = new ArrayList<>(totals.size());
+    for (Map.Entry<String, int[]> e : totals.entrySet()) {
+      out.add(new IntegrationTypeCount(e.getKey(), e.getValue()[0], e.getValue()[1]));
+    }
+    return out;
+  }
+
+  private static List<String> productsConnected(List<ResolvedInstance> group) {
+    Set<String> seen = new LinkedHashSet<>();
+    for (ResolvedInstance r : group) {
+      seen.add(r.instance().productName());
+    }
+    return List.copyOf(seen);
+  }
+
+  private static Instant latestSuccess(List<ResolvedInstance> group) {
+    Instant max = null;
+    for (ResolvedInstance r : group) {
+      Instant t = r.instance().lastSuccessTimestamp();
+      if (t != null && (max == null || t.isAfter(max))) {
+        max = t;
+      }
+    }
+    return max;
   }
 
   // Per-data-source buckets are minted lazily via computeIfAbsent — one ArrayList per
