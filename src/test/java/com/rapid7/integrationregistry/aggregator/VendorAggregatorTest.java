@@ -203,4 +203,42 @@ class VendorAggregatorTest {
       assertThat(cards.get(0).aggregateHealth()).isEqualTo(IntegrationStatus.ERROR);
     }
   }
+
+  @Nested
+  class VendorServiceRollupTest {
+
+    @Test
+    void toVendorServiceCards_shouldRollUpDataSourceStates_atVendorServiceLevel() {
+      // Arrange — Microsoft Defender exposed via two products. Two distinct data sources.
+      // DS1 (IDR) = HEALTHY; DS2 (ICON) = WARNING. VS rollup = WARNING.
+      VendorMappingSnapshot snapshot =
+          FakeVendorMappingSnapshot.with(MAPPING_VERSION)
+              .map(
+                  ProductName.INSIGHT_IDR,
+                  SourceType.PRODUCT_TYPE,
+                  "microsoft-defender-endpoint",
+                  MS_DEFENDER)
+              .map(
+                  ProductName.INSIGHT_CONNECT,
+                  SourceType.PLUGIN_NAME,
+                  "microsoft-defender",
+                  MS_DEFENDER)
+              .build();
+
+      List<NormalizedIntegration> instances =
+          List.of(
+              NormalizedIntegrationFixtures.idrInstance(
+                  "es_1", "microsoft-defender-endpoint", IntegrationStatus.HEALTHY),
+              NormalizedIntegrationFixtures.iconInstance(
+                  "c_1", "microsoft-defender", IntegrationStatus.WARNING));
+
+      // Act
+      List<VendorServiceCard> cards = aggregatorWith(snapshot).toVendorServiceCards(instances);
+
+      // Assert
+      assertThat(cards).hasSize(1);
+      assertThat(cards.get(0).aggregateHealth()).isEqualTo(IntegrationStatus.WARNING);
+      assertThat(cards.get(0).integrationsConnected()).isEqualTo(2);
+    }
+  }
 }
