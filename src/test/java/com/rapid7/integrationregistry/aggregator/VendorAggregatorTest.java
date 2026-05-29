@@ -317,5 +317,43 @@ class VendorAggregatorTest {
       // Assert
       assertThat(cards.get(0).lastUpdated()).isNull();
     }
+
+    @Test
+    void toVendorServiceCards_shouldMergeMultipleProducts_intoOneVendorServiceCard() {
+      // Arrange — Microsoft Defender via three products: IDR, ICON, and a hypothetical
+      // unknown product instance. The first two map to the same vendor_service_id;
+      // the third is unknown.
+      VendorMappingSnapshot snapshot =
+          FakeVendorMappingSnapshot.with(MAPPING_VERSION)
+              .map(
+                  ProductName.INSIGHT_IDR,
+                  SourceType.PRODUCT_TYPE,
+                  "microsoft-defender-endpoint",
+                  MS_DEFENDER)
+              .map(
+                  ProductName.INSIGHT_CONNECT,
+                  SourceType.PLUGIN_NAME,
+                  "microsoft-defender",
+                  MS_DEFENDER)
+              .build();
+
+      List<NormalizedIntegration> instances =
+          List.of(
+              NormalizedIntegrationFixtures.idrInstance(
+                  "es_1", "microsoft-defender-endpoint", IntegrationStatus.HEALTHY),
+              NormalizedIntegrationFixtures.iconInstance(
+                  "c_1", "microsoft-defender", IntegrationStatus.HEALTHY));
+
+      // Act
+      List<VendorServiceCard> cards = aggregatorWith(snapshot).toVendorServiceCards(instances);
+
+      // Assert — exactly ONE Microsoft Defender card
+      assertThat(cards).hasSize(1);
+      VendorServiceCard card = cards.get(0);
+      assertThat(card.vendorServiceId()).isEqualTo("microsoft-defender");
+      assertThat(card.integrationsConnected()).isEqualTo(2);
+      assertThat(card.productsConnected())
+          .containsExactlyInAnyOrder("InsightIDR", "InsightConnect");
+    }
   }
 }
