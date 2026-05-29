@@ -528,6 +528,19 @@ class ProjectionRecordsTest {
         }
 
         @Test
+        void constructor_shouldThrowIAE_whenVendorServicesCountDoesNotEqualListSize() {
+            // Arrange — invariant: vendorServicesCount must equal vendorServices.size()
+            // (mirrors DataSourceDetail's integrationsCount invariant)
+            List<VendorServiceCard> services = List.of(oneVendorService());
+
+            // Assert
+            assertThatIllegalArgumentException()
+                .isThrownBy(() -> new VendorScopedView(
+                    VENDOR_ID, VENDOR_NAME, 5, AGGREGATE_HEALTH, LAST_UPDATED, services))
+                .withMessageContaining(VendorScopedView.FIELD_VENDOR_SERVICES_COUNT);
+        }
+
+        @Test
         void constructor_shouldThrowNPE_whenVendorIdNull() {
             assertNpeFromCtor(
                 () -> new VendorScopedView(

@@ -36,6 +36,11 @@ public record VendorScopedView(
             throw new IllegalArgumentException(
                 FIELD_VENDOR_SERVICES_COUNT + " must be >= 0: " + vendorServicesCount);
         }
+        if (vendorServicesCount != vendorServices.size()) {
+            throw new IllegalArgumentException(
+                FIELD_VENDOR_SERVICES_COUNT + " (" + vendorServicesCount + ") must equal "
+                    + FIELD_VENDOR_SERVICES + ".size() (" + vendorServices.size() + ")");
+        }
         vendorServices = List.copyOf(vendorServices);
     }
 }

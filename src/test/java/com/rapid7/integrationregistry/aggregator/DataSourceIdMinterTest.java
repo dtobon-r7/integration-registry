@@ -47,7 +47,7 @@ class DataSourceIdMinterTest {
         // Arrange — Turkish locale lowercases 'I' to lowercase-dotless-ı by default;
         // RFC-001 demands a deterministic ASCII slug, so the minter MUST use Locale.ROOT.
         Locale original = Locale.getDefault();
-        Locale.setDefault(new Locale("tr", "TR"));
+        Locale.setDefault(Locale.of("tr", "TR"));
         try {
             // Act
             String result = DataSourceIdMinter.mint(
@@ -86,7 +86,18 @@ class DataSourceIdMinterTest {
         assertThatIllegalArgumentException()
             .isThrownBy(() -> DataSourceIdMinter.mint("", SourceType.PRODUCT_TYPE, "x"))
             .withMessageContaining("productName")
-            .withMessageContaining("empty");
+            .withMessageContaining("blank");
+    }
+
+    @Test
+    void mint_shouldThrowIAE_whenProductNameWhitespaceOnly() {
+        // Arrange — a productName of only spaces would pass an .isEmpty() check
+        // but produce a malformed slug like "---" after .replace(' ', '-').
+        // .isBlank() is the correct gate.
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> DataSourceIdMinter.mint("   ", SourceType.PRODUCT_TYPE, "x"))
+            .withMessageContaining("productName")
+            .withMessageContaining("blank");
     }
 
     @Test

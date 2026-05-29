@@ -29,8 +29,8 @@ public final class DataSourceIdMinter {
         Objects.requireNonNull(productName, "productName");
         Objects.requireNonNull(sourceType, "sourceType");
         Objects.requireNonNull(sourceValue, "sourceValue");
-        if (productName.isEmpty()) {
-            throw new IllegalArgumentException("productName must not be empty");
+        if (productName.isBlank()) {
+            throw new IllegalArgumentException("productName must not be blank");
         }
         if (sourceValue.isEmpty()) {
             throw new IllegalArgumentException("sourceValue must not be empty");
