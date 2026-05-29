@@ -75,7 +75,7 @@ class DataSourceIdMinterTest {
   @Test
   void mint_shouldThrowNPE_whenSourceTypeNull() {
     assertThatNullPointerException()
-        .isThrownBy(() -> DataSourceIdMinter.mint("X", null, "x"))
+        .isThrownBy(() -> DataSourceIdMinter.mint("X", (SourceType) null, "x"))
         .withMessage("sourceType");
   }
 
