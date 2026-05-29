@@ -29,10 +29,10 @@ final class LayerDependencyRules {
                     .should().dependOnClassesThat().resideInAnyPackage(
                             "..controller..", "..service..", "..aggregator..", "..mapping..");
 
-    static final ArchRule aggregatorLayer_shouldNotDependOnNonMappingLayers =
+    static final ArchRule aggregatorLayer_shouldOnlyDependOnAdapterAndMapping =
             noClasses().that().resideInAPackage("..aggregator..")
                     .should().dependOnClassesThat().resideInAnyPackage(
-                            "..controller..", "..service..", "..coordinator..", "..adapter..");
+                            "..controller..", "..service..", "..coordinator..");
 
     static final ArchRule adapterLayer_shouldNotDependOnInternalLayers =
             noClasses().that().resideInAPackage("..adapter..")
