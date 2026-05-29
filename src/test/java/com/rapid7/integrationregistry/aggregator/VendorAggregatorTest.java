@@ -168,4 +168,39 @@ class VendorAggregatorTest {
           .contains(MAPPING_VERSION);
     }
   }
+
+  @Nested
+  class DataSourceRollupTest {
+
+    @Test
+    void toVendorServiceCards_shouldRollUpInstanceStates_atDataSourceLevel() {
+      // Arrange — three IDR instances under one data source, mixed states.
+      // Worst-state: error > missing_data > warning > disabled > healthy.
+      // Expected DS status: ERROR.
+      VendorMappingSnapshot snapshot =
+          FakeVendorMappingSnapshot.with(MAPPING_VERSION)
+              .map(
+                  ProductName.INSIGHT_IDR,
+                  SourceType.PRODUCT_TYPE,
+                  "microsoft-defender-endpoint",
+                  MS_DEFENDER)
+              .build();
+
+      List<NormalizedIntegration> instances =
+          List.of(
+              NormalizedIntegrationFixtures.idrInstance(
+                  "es_1", "microsoft-defender-endpoint", IntegrationStatus.HEALTHY),
+              NormalizedIntegrationFixtures.idrInstance(
+                  "es_2", "microsoft-defender-endpoint", IntegrationStatus.WARNING),
+              NormalizedIntegrationFixtures.idrInstance(
+                  "es_3", "microsoft-defender-endpoint", IntegrationStatus.ERROR));
+
+      // Act
+      List<VendorServiceCard> cards = aggregatorWith(snapshot).toVendorServiceCards(instances);
+
+      // Assert — single VS card, single DS, aggregate is ERROR rolled across instances
+      assertThat(cards).hasSize(1);
+      assertThat(cards.get(0).aggregateHealth()).isEqualTo(IntegrationStatus.ERROR);
+    }
+  }
 }

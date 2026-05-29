@@ -1,5 +1,6 @@
 package com.rapid7.integrationregistry.aggregator;
 
+import com.rapid7.integrationregistry.adapter.IntegrationStatus;
 import com.rapid7.integrationregistry.adapter.NormalizedIntegration;
 import com.rapid7.integrationregistry.mapping.ProductName;
 import com.rapid7.integrationregistry.mapping.SourceType;
@@ -34,8 +35,10 @@ import org.springframework.stereotype.Component;
 // VendorAggregator is the projection hub: it touches NormalizedIntegration plus all four
 // projection records and the resolution support types. The 17-type coupling is structural
 // to its role per RFC-001 §Component Design and not reducible without splitting the public
-// surface across multiple components, which the RFC explicitly rejects.
-@SuppressWarnings("PMD.CouplingBetweenObjects")
+// surface across multiple components, which the RFC explicitly rejects. The method count
+// is structural for the same reason: each public projection has its own grouping +
+// rollup helpers, and splitting them across classes would fracture the projection hub.
+@SuppressWarnings({"PMD.CouplingBetweenObjects", "PMD.TooManyMethods"})
 @Component
 public final class VendorAggregator {
 
@@ -163,23 +166,43 @@ public final class VendorAggregator {
   }
 
   private VendorServiceCard buildVendorServiceCard(List<ResolvedInstance> group) {
-    ResolvedInstance first = group.get(0);
-    VendorResolution r = first.resolution();
-    // Aggregates and rollup land in later tasks. For now: simple instance
-    // count, healthy-by-default rollup is wrong but is replaced before it
-    // ships to PR — Task 7's mixed-state DS test forces this code path to
-    // use HealthRollup correctly.
-    int integrationsConnected = group.size();
+    VendorResolution r = group.get(0).resolution();
+    Map<String, List<ResolvedInstance>> byDataSourceId = groupByDataSourceId(group);
+    IntegrationStatus aggregate =
+        byDataSourceId.values().stream()
+            .map(VendorAggregator::dataSourceStatus)
+            .reduce(HealthRollup::worstOf)
+            .orElseThrow();
     return new VendorServiceCard(
         r.vendorServiceId(),
         r.vendorServiceName(),
         r.vendorId(),
         r.vendorName(),
         r.vendorCategory(),
-        integrationsConnected,
+        group.size(),
         List.of(), // integrationTypeCounts — Task 9
         List.of(), // productsConnected — Task 9
-        group.get(0).instance().status(), // aggregateHealth — Task 7 makes this correct
+        aggregate,
         null); // lastUpdated — Task 9
+  }
+
+  // Per-data-source buckets are minted lazily via computeIfAbsent — one ArrayList per
+  // distinct dataSourceId, never per iteration. Hoisting the allocation outside the loop
+  // would defeat the grouping.
+  @SuppressWarnings("PMD.AvoidInstantiatingObjectsInLoops")
+  private static Map<String, List<ResolvedInstance>> groupByDataSourceId(
+      List<ResolvedInstance> group) {
+    Map<String, List<ResolvedInstance>> by = new LinkedHashMap<>();
+    for (ResolvedInstance r : group) {
+      by.computeIfAbsent(r.dataSourceId(), k -> new ArrayList<>()).add(r);
+    }
+    return by;
+  }
+
+  private static IntegrationStatus dataSourceStatus(List<ResolvedInstance> dsGroup) {
+    return dsGroup.stream()
+        .map(r -> r.instance().status())
+        .reduce(HealthRollup::worstOf)
+        .orElseThrow();
   }
 }
