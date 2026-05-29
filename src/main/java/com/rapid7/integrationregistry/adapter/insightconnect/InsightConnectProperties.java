@@ -30,15 +30,27 @@ public record InsightConnectProperties(
     private static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(5);
 
     public InsightConnectProperties {
-        Objects.requireNonNull(baseUrl, FIELD_BASE_URL);
-        Objects.requireNonNull(iconBase, FIELD_ICON_BASE);
-        // Strip a trailing slash so configuration_url templating
-        // ({iconBase}/automation/connections/{id}) never produces a double slash,
-        // regardless of how the deploy environment formats the value.
+        // Required URLs: reject null AND blank/whitespace at binding, so misconfiguration
+        // fails fast here rather than surfacing as an opaque runtime error on the first call.
+        baseUrl = requireText(baseUrl, FIELD_BASE_URL);
+        iconBase = requireText(iconBase, FIELD_ICON_BASE);
+        // Strip a trailing slash so URL building never produces a double slash, regardless
+        // of how the deploy environment formats the value — baseUrl feeds RestClient's URI
+        // builder and iconBase feeds configuration_url templating.
+        baseUrl = stripTrailingSlash(baseUrl);
         iconBase = stripTrailingSlash(iconBase);
         if (timeout == null) {
             timeout = DEFAULT_TIMEOUT;
         }
+    }
+
+    private static String requireText(String value, String field) {
+        Objects.requireNonNull(value, field);
+        String trimmed = value.strip();
+        if (trimmed.isEmpty()) {
+            throw new IllegalArgumentException(field + " must not be blank");
+        }
+        return trimmed;
     }
 
     private static String stripTrailingSlash(String url) {

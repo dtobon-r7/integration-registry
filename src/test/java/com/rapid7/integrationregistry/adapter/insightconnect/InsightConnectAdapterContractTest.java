@@ -20,7 +20,6 @@ import org.springframework.test.web.client.response.MockRestResponseCreators;
 import org.springframework.web.client.RestClient;
 
 import java.time.Instant;
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -62,13 +61,26 @@ class InsightConnectAdapterContractTest {
                                       MediaType.APPLICATION_JSON));
     }
 
-    /** Attaches a logback ListAppender to the adapter's logger to capture emitted events. */
-    private static ListAppender<ILoggingEvent> captureAdapterLogs() {
+    /**
+     * Attaches a logback {@link ListAppender} to the adapter's logger to capture
+     * emitted events. {@link LogCapture#close()} detaches it again — use in a
+     * try-with-resources so the appender never leaks onto the shared logger.
+     */
+    private static LogCapture captureAdapterLogs() {
         Logger logger = (Logger) LoggerFactory.getLogger(InsightConnectAdapter.class);
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
         appender.start();
         logger.addAppender(appender);
-        return appender;
+        return new LogCapture(logger, appender);
+    }
+
+    private record LogCapture(Logger logger, ListAppender<ILoggingEvent> appender)
+            implements AutoCloseable {
+        @Override
+        public void close() {
+            logger.detachAppender(appender);
+            appender.stop();
+        }
     }
 
     @Test
@@ -192,16 +204,17 @@ class InsightConnectAdapterContractTest {
     void fetch_shouldWarn_whenSkippingMalformedRecord() throws Exception {
         // Arrange — capture logs; fixture has 2 malformed records (missing id, missing plugin name)
         Harness h = harness();
-        ListAppender<ILoggingEvent> logs = captureAdapterLogs();
         stub(h.server(), "malformed-skipped.json");
-        // Act
-        h.adapter().fetch(ORG_ID, new HttpHeaders());
-        // Assert — each skip is observable to a curator via a WARN
-        assertThat(logs.list)
-            .filteredOn(e -> e.getLevel() == Level.WARN)
-            .extracting(ILoggingEvent::getFormattedMessage)
-            .anySatisfy(m -> assertThat(m).contains("missing id"))
-            .anySatisfy(m -> assertThat(m).contains("missing plugin name"));
+        try (LogCapture logs = captureAdapterLogs()) {
+            // Act
+            h.adapter().fetch(ORG_ID, new HttpHeaders());
+            // Assert — each skip is observable to a curator via a WARN
+            assertThat(logs.appender().list)
+                .filteredOn(e -> e.getLevel() == Level.WARN)
+                .extracting(ILoggingEvent::getFormattedMessage)
+                .anySatisfy(m -> assertThat(m).contains("missing id"))
+                .anySatisfy(m -> assertThat(m).contains("missing plugin name"));
+        }
         h.server().verify();
     }
 

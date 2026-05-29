@@ -128,7 +128,7 @@ The orchestrator enum is exhaustive (`healthy | error | warning | stopped | unkn
 
 **No-test case**: a healthy orchestrator with no test signal resolves to `missing_data` (row 6) — we cannot confirm the connection works, which is exactly the `missing_data` "insufficient data / silent failure" semantics. Such a connection never reports `healthy` because row 5 requires a confirming successful, non-stale test.
 
-**Unrecognized orchestrator value**: if ICON introduces a sixth orchestrator status, an unmatched value falls to `missing_data` with a `WARN` log naming the unexpected value and the connection id — so one anomalous connection cannot fail the whole fetch. This is a documented fallback, not a silent default; it is unit-tested.
+**Unrecognized orchestrator value**: if ICON introduces a sixth orchestrator status, an unmatched value falls to `missing_data` with a `WARN` log naming the unexpected status value — so one anomalous connection cannot fail the whole fetch. (The mapper is pure and has no connection id; the adapter's own skip-path WARNs carry the id.) This is a documented fallback, not a silent default; it is unit-tested.
 
 ## Error handling
 
