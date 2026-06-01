@@ -189,7 +189,6 @@ public final class VendorAggregator {
     VendorResolution resolution = VendorResolution.unknown();
     String dataSourceId = DataSourceIdMinter.mint(rawProductName, rawSourceType, sourceValue);
     warnOnceForTriplet(rawProductName, rawSourceType, sourceValue, warned);
-    // displayName == sourceValue is intentional per spec §displayName gap (deferred-scope ruling)
     return new ResolvedInstance(n, dataSourceId, resolution, sourceValue);
   }
 

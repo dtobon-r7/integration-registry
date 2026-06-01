@@ -23,10 +23,10 @@ record ResolvedInstance(
     VendorResolution resolution,
     String displayName) {
 
-  static final String FIELD_INSTANCE = "instance";
-  static final String FIELD_DATA_SOURCE_ID = "dataSourceId";
-  static final String FIELD_RESOLUTION = "resolution";
-  static final String FIELD_DISPLAY_NAME = "displayName";
+  private static final String FIELD_INSTANCE = "instance";
+  private static final String FIELD_DATA_SOURCE_ID = "dataSourceId";
+  private static final String FIELD_RESOLUTION = "resolution";
+  private static final String FIELD_DISPLAY_NAME = "displayName";
 
   ResolvedInstance {
     Objects.requireNonNull(instance, FIELD_INSTANCE);
