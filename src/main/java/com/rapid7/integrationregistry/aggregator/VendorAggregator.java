@@ -40,7 +40,10 @@ import org.springframework.stereotype.Component;
 // surface across multiple components, which the RFC explicitly rejects. The method count
 // is structural for the same reason: each public projection has its own grouping +
 // rollup helpers, and splitting them across classes would fracture the projection hub.
-@SuppressWarnings({"PMD.CouplingBetweenObjects", "PMD.TooManyMethods"})
+// GodClass fires for the same structural reason: WMC accumulates across the four projection
+// pipelines (resolution + four projections + bundle-integrity guards), and ATFD reflects
+// the projection-hub coupling we already accept.
+@SuppressWarnings({"PMD.CouplingBetweenObjects", "PMD.TooManyMethods", "PMD.GodClass"})
 @Component
 public final class VendorAggregator {
 
@@ -49,6 +52,16 @@ public final class VendorAggregator {
   private static final String UNMAPPED_LOG_FORMAT =
       "Unmapped vendor mapping triplet: productName='{}' sourceType='{}' "
           + "sourceValue='{}' mappingVersion='{}'";
+
+  private static final String VS_IDENTITY_CONFLICT_LOG_FORMAT =
+      "Bundle integrity warning: vendor_service_id='{}' has inconsistent identity "
+          + "across resolved instances — vendor_service_name='{}' vs '{}', "
+          + "vendor_id='{}' vs '{}', vendor_name='{}' vs '{}', "
+          + "vendor_category='{}' vs '{}', mappingVersion='{}'";
+
+  private static final String VENDOR_NAME_CONFLICT_LOG_FORMAT =
+      "Bundle integrity warning: vendor_id='{}' has inconsistent vendor_name "
+          + "across resolved instances — '{}' vs '{}', mappingVersion='{}'";
 
   private static final String FIELD_INSTANCES = "instances";
 
@@ -64,7 +77,8 @@ public final class VendorAggregator {
       return List.of();
     }
     List<ResolvedInstance> resolved = resolveAll(instances);
-    return buildVendorServiceCards(resolved);
+    Set<String> warnedConflicts = new HashSet<>();
+    return buildVendorServiceCards(resolved, warnedConflicts);
   }
 
   public List<VendorCard> toVendorCards(List<NormalizedIntegration> instances) {
@@ -73,7 +87,8 @@ public final class VendorAggregator {
       return List.of();
     }
     List<ResolvedInstance> resolved = resolveAll(instances);
-    return buildVendorCards(resolved);
+    Set<String> warnedConflicts = new HashSet<>();
+    return buildVendorCards(resolved, warnedConflicts);
   }
 
   public Optional<VendorScopedView> toVendorScopedView(
@@ -89,7 +104,8 @@ public final class VendorAggregator {
     if (scoped.isEmpty()) {
       return Optional.empty();
     }
-    return Optional.of(buildVendorScopedView(scoped));
+    Set<String> warnedConflicts = new HashSet<>();
+    return Optional.of(buildVendorScopedView(scoped, warnedConflicts));
   }
 
   public Optional<VendorServiceDetail> toVendorServiceDetail(
@@ -107,7 +123,8 @@ public final class VendorAggregator {
     if (scoped.isEmpty()) {
       return Optional.empty();
     }
-    return Optional.of(buildVendorServiceDetail(scoped));
+    Set<String> warnedConflicts = new HashSet<>();
+    return Optional.of(buildVendorServiceDetail(scoped, warnedConflicts));
   }
 
   // ----- resolution pass -----
@@ -166,7 +183,8 @@ public final class VendorAggregator {
 
   // ----- vendor-service cards -----
 
-  private List<VendorServiceCard> buildVendorServiceCards(List<ResolvedInstance> resolved) {
+  private List<VendorServiceCard> buildVendorServiceCards(
+      List<ResolvedInstance> resolved, Set<String> warnedConflicts) {
     Map<String, List<ResolvedInstance>> byVendorServiceId = new LinkedHashMap<>();
     for (ResolvedInstance r : resolved) {
       byVendorServiceId
@@ -175,13 +193,15 @@ public final class VendorAggregator {
     }
     List<VendorServiceCard> cards = new ArrayList<>(byVendorServiceId.size());
     for (Map.Entry<String, List<ResolvedInstance>> e : byVendorServiceId.entrySet()) {
-      cards.add(buildVendorServiceCard(e.getValue()));
+      cards.add(buildVendorServiceCard(e.getValue(), warnedConflicts));
     }
     return cards;
   }
 
-  private VendorServiceCard buildVendorServiceCard(List<ResolvedInstance> group) {
+  private VendorServiceCard buildVendorServiceCard(
+      List<ResolvedInstance> group, Set<String> warnedConflicts) {
     VendorResolution r = group.get(0).resolution();
+    warnIfVendorServiceIdentityInconsistent(group, r, warnedConflicts);
     Map<String, List<ResolvedInstance>> byDataSourceId = groupByDataSourceId(group);
     IntegrationStatus aggregate =
         byDataSourceId.values().stream()
@@ -199,6 +219,31 @@ public final class VendorAggregator {
         productsConnected(group),
         aggregate,
         latestSuccess(group));
+  }
+
+  private void warnIfVendorServiceIdentityInconsistent(
+      List<ResolvedInstance> group, VendorResolution canonical, Set<String> warnedConflicts) {
+    for (int i = 1; i < group.size(); i++) {
+      VendorResolution other = group.get(i).resolution();
+      if (!Objects.equals(canonical, other)) {
+        String dedupKey = "vs:" + canonical.vendorServiceId();
+        if (warnedConflicts.add(dedupKey)) {
+          LOG.warn(
+              VS_IDENTITY_CONFLICT_LOG_FORMAT,
+              canonical.vendorServiceId(),
+              canonical.vendorServiceName(),
+              other.vendorServiceName(),
+              canonical.vendorId(),
+              other.vendorId(),
+              canonical.vendorName(),
+              other.vendorName(),
+              canonical.vendorCategory(),
+              other.vendorCategory(),
+              snapshot.mappingVersion());
+        }
+        return;
+      }
+    }
   }
 
   private static List<IntegrationTypeCount> integrationTypeCounts(List<ResolvedInstance> group) {
@@ -255,8 +300,10 @@ public final class VendorAggregator {
 
   // ----- vendor-service detail -----
 
-  private VendorServiceDetail buildVendorServiceDetail(List<ResolvedInstance> group) {
+  private VendorServiceDetail buildVendorServiceDetail(
+      List<ResolvedInstance> group, Set<String> warnedConflicts) {
     VendorResolution r = group.get(0).resolution();
+    warnIfVendorServiceIdentityInconsistent(group, r, warnedConflicts);
     Map<String, List<ResolvedInstance>> byDataSourceId = groupByDataSourceId(group);
     List<DataSourceDetail> dataSources = new ArrayList<>(byDataSourceId.size());
     for (List<ResolvedInstance> dsGroup : byDataSourceId.values()) {
@@ -309,9 +356,10 @@ public final class VendorAggregator {
 
   // ----- vendor-scoped view -----
 
-  private VendorScopedView buildVendorScopedView(List<ResolvedInstance> scoped) {
+  private VendorScopedView buildVendorScopedView(
+      List<ResolvedInstance> scoped, Set<String> warnedConflicts) {
     VendorResolution v = scoped.get(0).resolution();
-    List<VendorServiceCard> services = buildVendorServiceCards(scoped);
+    List<VendorServiceCard> services = buildVendorServiceCards(scoped, warnedConflicts);
     IntegrationStatus aggregate =
         services.stream()
             .map(VendorServiceCard::aggregateHealth)
@@ -324,13 +372,27 @@ public final class VendorAggregator {
 
   // ----- vendor cards -----
 
-  private static List<VendorCard> buildVendorCards(List<ResolvedInstance> resolved) {
+  private List<VendorCard> buildVendorCards(
+      List<ResolvedInstance> resolved, Set<String> warnedConflicts) {
     // vendorId -> (vendorName, set-of-vendorServiceIds)
     Map<String, VendorAccumulator> byVendorId = new LinkedHashMap<>();
     for (ResolvedInstance r : resolved) {
       VendorResolution res = r.resolution();
-      VendorAccumulator acc =
-          byVendorId.computeIfAbsent(res.vendorId(), k -> new VendorAccumulator(res.vendorName()));
+      VendorAccumulator acc = byVendorId.get(res.vendorId());
+      if (acc == null) {
+        acc = new VendorAccumulator(res.vendorName());
+        byVendorId.put(res.vendorId(), acc);
+      } else if (!acc.vendorName.equals(res.vendorName())) {
+        String dedupKey = "vendor:" + res.vendorId();
+        if (warnedConflicts.add(dedupKey)) {
+          LOG.warn(
+              VENDOR_NAME_CONFLICT_LOG_FORMAT,
+              res.vendorId(),
+              acc.vendorName,
+              res.vendorName(),
+              snapshot.mappingVersion());
+        }
+      }
       acc.vendorServiceIds.add(res.vendorServiceId());
     }
     List<VendorCard> cards = new ArrayList<>(byVendorId.size());
