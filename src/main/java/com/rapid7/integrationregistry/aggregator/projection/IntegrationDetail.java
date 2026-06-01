@@ -1,4 +1,4 @@
-package com.rapid7.integrationregistry.aggregator;
+package com.rapid7.integrationregistry.aggregator.projection;
 
 import com.rapid7.integrationregistry.adapter.IntegrationStatus;
 import java.time.Instant;
