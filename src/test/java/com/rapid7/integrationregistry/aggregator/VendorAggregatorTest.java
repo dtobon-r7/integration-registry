@@ -8,6 +8,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.rapid7.integrationregistry.adapter.IntegrationStatus;
 import com.rapid7.integrationregistry.adapter.NormalizedIntegration;
+import com.rapid7.integrationregistry.mapping.MapBackedSnapshotBuilder;
 import com.rapid7.integrationregistry.mapping.ProductName;
 import com.rapid7.integrationregistry.mapping.SourceType;
 import com.rapid7.integrationregistry.mapping.VendorCategory;
@@ -56,7 +57,7 @@ class VendorAggregatorTest {
       // Arrange — one IDR instance for Microsoft Defender. The snapshot has
       // exactly the triplet mapped.
       VendorMappingSnapshot snapshot =
-          FakeVendorMappingSnapshot.with(MAPPING_VERSION)
+          MapBackedSnapshotBuilder.with(MAPPING_VERSION)
               .map(
                   ProductName.INSIGHT_IDR,
                   SourceType.PRODUCT_TYPE,
@@ -86,7 +87,7 @@ class VendorAggregatorTest {
     @Test
     void toVendorServiceCards_shouldEmitSyntheticCard_whenSnapshotReturnsUnknown() {
       // Arrange — one ICON instance, snapshot has nothing mapped at all
-      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      VendorMappingSnapshot snapshot = MapBackedSnapshotBuilder.with(MAPPING_VERSION).build();
       NormalizedIntegration instance =
           NormalizedIntegrationFixtures.iconInstance(
               "c_1", "new-product-x", IntegrationStatus.HEALTHY);
@@ -116,7 +117,7 @@ class VendorAggregatorTest {
     void toVendorServiceCards_shouldRouteToUnknownPath_whenProductNameStringIsUnmappable() {
       // Arrange — adapter wrote a productName string that isn't a ProductName enum value.
       // Spec ruling Q1.1: fold into unknown-collapse path with WARN.
-      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      VendorMappingSnapshot snapshot = MapBackedSnapshotBuilder.with(MAPPING_VERSION).build();
       NormalizedIntegration instance =
           NormalizedIntegrationFixtures.instance(
               "MysteryProduct",
@@ -145,7 +146,7 @@ class VendorAggregatorTest {
     @Test
     void toVendorServiceCards_shouldRouteToUnknownPath_whenSourceTypeStringIsUnmappable() {
       // Arrange — productName is canonical, sourceType is junk.
-      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      VendorMappingSnapshot snapshot = MapBackedSnapshotBuilder.with(MAPPING_VERSION).build();
       NormalizedIntegration instance =
           NormalizedIntegrationFixtures.instance(
               "InsightIDR",
@@ -180,7 +181,7 @@ class VendorAggregatorTest {
       // Worst-state: error > missing_data > warning > disabled > healthy.
       // Expected DS status: ERROR.
       VendorMappingSnapshot snapshot =
-          FakeVendorMappingSnapshot.with(MAPPING_VERSION)
+          MapBackedSnapshotBuilder.with(MAPPING_VERSION)
               .map(
                   ProductName.INSIGHT_IDR,
                   SourceType.PRODUCT_TYPE,
@@ -214,7 +215,7 @@ class VendorAggregatorTest {
       // Arrange — Microsoft Defender exposed via two products. Two distinct data sources.
       // DS1 (IDR) = HEALTHY; DS2 (ICON) = WARNING. VS rollup = WARNING.
       VendorMappingSnapshot snapshot =
-          FakeVendorMappingSnapshot.with(MAPPING_VERSION)
+          MapBackedSnapshotBuilder.with(MAPPING_VERSION)
               .map(
                   ProductName.INSIGHT_IDR,
                   SourceType.PRODUCT_TYPE,
@@ -256,7 +257,7 @@ class VendorAggregatorTest {
       // Arrange — Microsoft Defender via IDR (2 instances) + ICON (1 instance).
       // Two distinct integrationTypes; one ERROR; mixed lastSuccess timestamps.
       VendorMappingSnapshot snapshot =
-          FakeVendorMappingSnapshot.with(MAPPING_VERSION)
+          MapBackedSnapshotBuilder.with(MAPPING_VERSION)
               .map(
                   ProductName.INSIGHT_IDR,
                   SourceType.PRODUCT_TYPE,
@@ -297,7 +298,7 @@ class VendorAggregatorTest {
     void toVendorServiceCards_shouldReturnNullLastUpdated_whenNoInstanceHasTimestamp() {
       // Arrange — single VS, every instance has null lastSuccessTimestamp
       VendorMappingSnapshot snapshot =
-          FakeVendorMappingSnapshot.with(MAPPING_VERSION)
+          MapBackedSnapshotBuilder.with(MAPPING_VERSION)
               .map(
                   ProductName.INSIGHT_IDR,
                   SourceType.PRODUCT_TYPE,
@@ -325,7 +326,7 @@ class VendorAggregatorTest {
       // unknown product instance. The first two map to the same vendor_service_id;
       // the third is unknown.
       VendorMappingSnapshot snapshot =
-          FakeVendorMappingSnapshot.with(MAPPING_VERSION)
+          MapBackedSnapshotBuilder.with(MAPPING_VERSION)
               .map(
                   ProductName.INSIGHT_IDR,
                   SourceType.PRODUCT_TYPE,
@@ -376,7 +377,7 @@ class VendorAggregatorTest {
           new VendorResolution("jira", "Jira", VendorCategory.ITSM, "atlassian", "Atlassian");
 
       VendorMappingSnapshot snapshot =
-          FakeVendorMappingSnapshot.with(MAPPING_VERSION)
+          MapBackedSnapshotBuilder.with(MAPPING_VERSION)
               .map(
                   ProductName.INSIGHT_IDR,
                   SourceType.PRODUCT_TYPE,
@@ -415,7 +416,7 @@ class VendorAggregatorTest {
 
     @Test
     void toVendorCards_shouldEmitSyntheticUnknownVendor_whenUnmappedTripletPresent() {
-      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      VendorMappingSnapshot snapshot = MapBackedSnapshotBuilder.with(MAPPING_VERSION).build();
       List<NormalizedIntegration> instances =
           List.of(
               NormalizedIntegrationFixtures.iconInstance(
@@ -438,7 +439,7 @@ class VendorAggregatorTest {
     @Test
     void toVendorServiceDetail_shouldReturnEmpty_whenIdNotFound() {
       VendorMappingSnapshot snapshot =
-          FakeVendorMappingSnapshot.with(MAPPING_VERSION)
+          MapBackedSnapshotBuilder.with(MAPPING_VERSION)
               .map(
                   ProductName.INSIGHT_IDR,
                   SourceType.PRODUCT_TYPE,
@@ -462,7 +463,7 @@ class VendorAggregatorTest {
     void toVendorServiceDetail_shouldReturnDetailWithDataSources_whenFound() {
       // Arrange — Microsoft Defender via two products, three instances
       VendorMappingSnapshot snapshot =
-          FakeVendorMappingSnapshot.with(MAPPING_VERSION)
+          MapBackedSnapshotBuilder.with(MAPPING_VERSION)
               .map(
                   ProductName.INSIGHT_IDR,
                   SourceType.PRODUCT_TYPE,
@@ -523,7 +524,7 @@ class VendorAggregatorTest {
     @Test
     void toVendorServiceDetail_shouldResolveUnknownVendorServiceId_whenUnmappedInstancesPresent() {
       // Arrange — three unmapped triplets, all collapse to the unknown VS
-      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      VendorMappingSnapshot snapshot = MapBackedSnapshotBuilder.with(MAPPING_VERSION).build();
       List<NormalizedIntegration> instances =
           List.of(
               NormalizedIntegrationFixtures.iconInstance(
@@ -561,7 +562,7 @@ class VendorAggregatorTest {
 
     @Test
     void toVendorScopedView_shouldReturnEmpty_whenIdNotFound() {
-      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      VendorMappingSnapshot snapshot = MapBackedSnapshotBuilder.with(MAPPING_VERSION).build();
       List<NormalizedIntegration> instances =
           List.of(
               NormalizedIntegrationFixtures.idrInstance("es_1", "x", IntegrationStatus.HEALTHY));
@@ -590,7 +591,7 @@ class VendorAggregatorTest {
               "Microsoft");
 
       VendorMappingSnapshot snapshot =
-          FakeVendorMappingSnapshot.with(MAPPING_VERSION)
+          MapBackedSnapshotBuilder.with(MAPPING_VERSION)
               .map(
                   ProductName.INSIGHT_IDR,
                   SourceType.PRODUCT_TYPE,
@@ -628,7 +629,7 @@ class VendorAggregatorTest {
 
     @Test
     void toVendorScopedView_shouldResolveUnknownVendorId_whenUnmappedInstancesPresent() {
-      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      VendorMappingSnapshot snapshot = MapBackedSnapshotBuilder.with(MAPPING_VERSION).build();
       List<NormalizedIntegration> instances =
           List.of(
               NormalizedIntegrationFixtures.iconInstance(
@@ -652,7 +653,7 @@ class VendorAggregatorTest {
     @Test
     void toVendorServiceCards_shouldCollapseAllUnmappedTriplets_intoOneSyntheticCard() {
       // Arrange — three different unmapped triplets, each yielding its own DS
-      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      VendorMappingSnapshot snapshot = MapBackedSnapshotBuilder.with(MAPPING_VERSION).build();
       List<NormalizedIntegration> instances =
           List.of(
               NormalizedIntegrationFixtures.iconInstance("c_1", "alpha", IntegrationStatus.HEALTHY),
@@ -675,7 +676,7 @@ class VendorAggregatorTest {
     void toVendorServiceCards_shouldEmitOneWarn_perDistinctUnmappedTriplet() {
       // Arrange — three instances sharing a triplet + two with distinct triplets.
       // Distinct triplet count = 3.
-      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      VendorMappingSnapshot snapshot = MapBackedSnapshotBuilder.with(MAPPING_VERSION).build();
       List<NormalizedIntegration> instances =
           List.of(
               NormalizedIntegrationFixtures.iconInstance("c_1", "alpha", IntegrationStatus.HEALTHY),
@@ -707,7 +708,7 @@ class VendorAggregatorTest {
 
     @Test
     void toVendorServiceCards_shouldReturnEmpty_forEmptyInput() {
-      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      VendorMappingSnapshot snapshot = MapBackedSnapshotBuilder.with(MAPPING_VERSION).build();
 
       // Act
       List<VendorServiceCard> cards = aggregatorWith(snapshot).toVendorServiceCards(List.of());
@@ -719,27 +720,27 @@ class VendorAggregatorTest {
 
     @Test
     void toVendorCards_shouldReturnEmpty_forEmptyInput() {
-      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      VendorMappingSnapshot snapshot = MapBackedSnapshotBuilder.with(MAPPING_VERSION).build();
       assertThat(aggregatorWith(snapshot).toVendorCards(List.of())).isEmpty();
       assertThat(appender.list).isEmpty();
     }
 
     @Test
     void toVendorScopedView_shouldReturnEmpty_forEmptyInput() {
-      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      VendorMappingSnapshot snapshot = MapBackedSnapshotBuilder.with(MAPPING_VERSION).build();
       assertThat(aggregatorWith(snapshot).toVendorScopedView("microsoft", List.of())).isEmpty();
     }
 
     @Test
     void toVendorServiceDetail_shouldReturnEmpty_forEmptyInput() {
-      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      VendorMappingSnapshot snapshot = MapBackedSnapshotBuilder.with(MAPPING_VERSION).build();
       assertThat(aggregatorWith(snapshot).toVendorServiceDetail("microsoft-defender", List.of()))
           .isEmpty();
     }
 
     @Test
     void toVendorServiceCards_shouldThrowNPE_whenInstancesNull() {
-      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      VendorMappingSnapshot snapshot = MapBackedSnapshotBuilder.with(MAPPING_VERSION).build();
       org.assertj.core.api.Assertions.assertThatNullPointerException()
           .isThrownBy(() -> aggregatorWith(snapshot).toVendorServiceCards(null))
           .withMessage("instances");
@@ -747,7 +748,7 @@ class VendorAggregatorTest {
 
     @Test
     void toVendorScopedView_shouldThrowNPE_whenVendorIdNull() {
-      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      VendorMappingSnapshot snapshot = MapBackedSnapshotBuilder.with(MAPPING_VERSION).build();
       org.assertj.core.api.Assertions.assertThatNullPointerException()
           .isThrownBy(() -> aggregatorWith(snapshot).toVendorScopedView(null, List.of()))
           .withMessage("vendorId");
@@ -755,7 +756,7 @@ class VendorAggregatorTest {
 
     @Test
     void toVendorServiceDetail_shouldThrowNPE_whenVendorServiceIdNull() {
-      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      VendorMappingSnapshot snapshot = MapBackedSnapshotBuilder.with(MAPPING_VERSION).build();
       org.assertj.core.api.Assertions.assertThatNullPointerException()
           .isThrownBy(() -> aggregatorWith(snapshot).toVendorServiceDetail(null, List.of()))
           .withMessage("vendorServiceId");
@@ -765,7 +766,7 @@ class VendorAggregatorTest {
     void resolution_shouldThrowIAE_whenAdapterSuppliedProductNameIsBlank() {
       // Arrange — adapter contract violation: blank productName.
       // Spec ruling: programming-error path, not folded into unknown.
-      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      VendorMappingSnapshot snapshot = MapBackedSnapshotBuilder.with(MAPPING_VERSION).build();
       NormalizedIntegration instance =
           NormalizedIntegrationFixtures.instance(
               "   ", "product_type", "x", "T", IntegrationStatus.HEALTHY, "i_1", null);
@@ -777,7 +778,7 @@ class VendorAggregatorTest {
 
     @Test
     void resolution_shouldThrowIAE_whenAdapterSuppliedSourceTypeIsBlank() {
-      VendorMappingSnapshot snapshot = FakeVendorMappingSnapshot.with(MAPPING_VERSION).build();
+      VendorMappingSnapshot snapshot = MapBackedSnapshotBuilder.with(MAPPING_VERSION).build();
       NormalizedIntegration instance =
           NormalizedIntegrationFixtures.instance(
               "InsightIDR", "   ", "x", "T", IntegrationStatus.HEALTHY, "i_1", null);
@@ -811,7 +812,7 @@ class VendorAggregatorTest {
               "Microsoft");
 
       VendorMappingSnapshot snapshot =
-          FakeVendorMappingSnapshot.with(MAPPING_VERSION)
+          MapBackedSnapshotBuilder.with(MAPPING_VERSION)
               .map(
                   ProductName.INSIGHT_IDR,
                   SourceType.PRODUCT_TYPE,
@@ -872,7 +873,7 @@ class VendorAggregatorTest {
               "Microsoft Corporation");
 
       VendorMappingSnapshot snapshot =
-          FakeVendorMappingSnapshot.with(MAPPING_VERSION)
+          MapBackedSnapshotBuilder.with(MAPPING_VERSION)
               .map(
                   ProductName.INSIGHT_IDR,
                   SourceType.PRODUCT_TYPE,
@@ -931,7 +932,7 @@ class VendorAggregatorTest {
               "Microsoft Corporation");
 
       VendorMappingSnapshot snapshot =
-          FakeVendorMappingSnapshot.with(MAPPING_VERSION)
+          MapBackedSnapshotBuilder.with(MAPPING_VERSION)
               .map(
                   ProductName.INSIGHT_IDR,
                   SourceType.PRODUCT_TYPE,
