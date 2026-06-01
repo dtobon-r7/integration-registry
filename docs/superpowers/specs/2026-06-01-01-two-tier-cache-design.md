@@ -31,8 +31,9 @@ stale, or write is track 07 plan 02.
 - **Client + serde: Spring Data Redis + Lettuce**, `FetchResult` as Jackson JSON inside a
   versioned envelope.
 - **Tests: Testcontainers `valkey/valkey:8-alpine`** for integration coverage, plus
-  no-container unit tests for the codec and key contract. Accepted consequence: `./mvnw verify`
-  now requires Docker.
+  no-container unit tests for the codec and key contract. This reverses `TESTING.md`'s
+  Docker-free rule for the cache tests only — captured in **ADR-006**; `TESTING.md` and the
+  repo `CLAUDE.md` updated accordingly. Accepted consequence: `./mvnw verify` now requires Docker.
 
 ## Architecture & package layout
 
@@ -187,7 +188,8 @@ data age on every refresh. (Design decision — flag for Phase 7.)
 
 ## Testing strategy
 
-**Integration — Testcontainers `valkey/valkey:8-alpine`:**
+**Integration — Testcontainers `valkey/valkey:8-alpine`** (per ADR-006, which amends
+`TESTING.md`'s Docker-free rule for the cache tests only):
 
 - Tier independence: write both tiers with short TTLs; after fresh expires, `readFresh` is
   empty and `readStale` still returns the entry; fresh-key expiry leaves the stale key intact.

@@ -12,8 +12,10 @@ Read-only aggregation layer for third-party integration metadata across Rapid7 p
 
 Requires JDK 25 on `JAVA_HOME` (the pom targets Java 25; ArchUnit 1.4.2 and PMD 7.17.0 read class file major version 69).
 
+**Docker is required for `verify`**: the Valkey cache tests (T07) use Testcontainers against `valkey/valkey:8-alpine` (ADR-006). A Docker daemon must be running. The rest of the suite is Docker-free.
+
 ```bash
-./mvnw verify          # full build + tests + ArchUnit + PMD
+./mvnw verify          # full build + tests + ArchUnit + PMD (needs Docker for cache tests)
 ./mvnw package         # build JAR (skip tests: -DskipTests)
 ./mvnw clean           # clean target/
 ```
