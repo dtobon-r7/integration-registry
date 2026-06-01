@@ -1,5 +1,12 @@
 # VendorAggregator — Implementation Plan
 
+> **Status:** Implemented (PR #9). This plan is a point-in-time record of the intended build. One
+> deviation landed during execution: the planned `FakeVendorMappingSnapshot` test double was
+> replaced by `MapBackedSnapshotBuilder` (in the `mapping` test source package), which drives the
+> **real** `MapBackedVendorMappingSnapshot` through its package-private `key(...)` seam instead of
+> hand-rolling a fake. The Task 4 code listings below predate that decision and are retained as
+> historical record — see the shipped `MapBackedSnapshotBuilder.java` for the actual API.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Land the `VendorAggregator` `@Component` that turns `(List<NormalizedIntegration>, VendorMappingSnapshot)` into the four RFC-001 read-API projection records — full grid, narrow vendor list, vendor-scoped, vendor-service detail — with three-level worst-state-wins rollup, single-row unknown collapse, and per-VS computed aggregates.
@@ -41,7 +48,7 @@
 | File | Responsibility |
 |---|---|
 | `DataSourceIdMinterStringOverloadTest.java` | TDD coverage for the new String overload — the three RFC vectors via String inputs, validation rules (blank `productName`, blank `sourceType`, empty `sourceValue`, `\|` in `sourceType` or `sourceValue`), Turkish-locale stability, and equivalence with the enum overload (parity test). |
-| `FakeVendorMappingSnapshot.java` | Hand-rolled `VendorMappingSnapshot` test double. Package-private. Has a `Builder` with `with(String mappingVersion)` factory and a fluent `.map(productName, sourceType, sourceValue, resolution)`. Stores entries in an internal `Map<TripletKey, VendorResolution>` keyed by `(ProductName, SourceType, String)`. Returns `VendorResolution.unknown()` on miss (mirrors `MapBackedVendorMappingSnapshot`). |
+| `MapBackedSnapshotBuilder.java` | Test builder in the `mapping` test source package (**superseded the planned `FakeVendorMappingSnapshot`**). Drives the **real** `MapBackedVendorMappingSnapshot` via its package-private `key(ProductName, SourceType, String)` seam — no hand-rolled fake. `with(String mappingVersion)` factory, fluent `.map(ProductName, SourceType, String, VendorResolution)`, `.build()` returns a `VendorMappingSnapshot`. Miss-returns-`unknown()` semantics come from the real snapshot, not a reimplementation. |
 | `NormalizedIntegrationFixtures.java` | Static helpers for tests: `idrInstance(integrationId, sourceValue, status)`, `idrInstance(integrationId, sourceValue, status, lastSuccess)`, `iconInstance(integrationId, sourceValue, status)`, `iconInstance(integrationId, sourceValue, status, lastSuccess)`, `instance(productName, sourceType, sourceValue, integrationType, status, integrationId, lastSuccess)` (escape hatch for unmapped/unmappable cases). All return real `NormalizedIntegration` records — no mocks. |
 | `VendorAggregatorTest.java` | Primary test class. `@Nested` blocks per scenario family, in this order: `ResolutionTest`, `DataSourceRollupTest`, `VendorServiceRollupTest`, `VendorRollupTest`, `VendorServiceCardsTest`, `VendorCardsTest`, `VendorScopedViewTest`, `VendorServiceDetailTest`, `UnknownCollapseTest`, `EdgeCasesTest`. Logback `ListAppender` set up in `@BeforeEach` / torn down in `@AfterEach`. |
 

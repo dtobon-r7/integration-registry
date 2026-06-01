@@ -1,7 +1,7 @@
 # Track 08 / Work Plan 02 — VendorAggregator design
 
 **Date**: 2026-05-29
-**Status**: Approved (design phase) — pending implementation
+**Status**: Implemented (PR #9)
 **Work plan**: `engagements/unified-integrations-view/project/tracks/08-vendor-aggregator-and-health-rollup/work-plans/02-vendor-aggregator.md`
 **Track scope**: `engagements/unified-integrations-view/project/tracks/08-vendor-aggregator-and-health-rollup/scope.md`
 **Driving RFC**: `engagements/unified-integrations-view/decisions/rfc/RFC-001-integration-registry.md`
@@ -191,7 +191,7 @@ This work plan uses the raw `sourceValue` as `displayName` for **all** data sour
 
 - **TDD** throughout. Pure unit tests, no Spring context, no `@SpringBootTest`.
 - AssertJ + JUnit 5 (parameterized tests, `@Nested` for scenario families).
-- Hand-rolled `FakeVendorMappingSnapshot`. No Mockito.
+- `MapBackedSnapshotBuilder` driving the real `MapBackedVendorMappingSnapshot`. No Mockito.
 - WARN assertions via Logback `ListAppender<ILoggingEvent>`.
 
 ### Test class structure
@@ -225,15 +225,18 @@ DataSourceIdMinterStringOverloadTest    sibling test class — round-trips, vali
 
 ### Test doubles
 
-```java
-final class FakeVendorMappingSnapshot implements VendorMappingSnapshot {
-    static Builder with(String mappingVersion) { ... }
+Tests drive the **real** `MapBackedVendorMappingSnapshot` via `MapBackedSnapshotBuilder` (in the
+`mapping` test source package, so it can reach the package-private `key(...)` factory and
+constructor). No hand-rolled fake, no Mockito — the canonical lookup code path is exercised
+directly.
 
-    static final class Builder {
-        Builder map(String productName, SourceType sourceType,
-                    String sourceValue, VendorResolution resolution) { ... }
-        FakeVendorMappingSnapshot build() { ... }
-    }
+```java
+public final class MapBackedSnapshotBuilder {
+    public static MapBackedSnapshotBuilder with(String mappingVersion) { ... }
+
+    public MapBackedSnapshotBuilder map(ProductName productName, SourceType sourceType,
+                                        String sourceValue, VendorResolution resolution) { ... }
+    public VendorMappingSnapshot build() { ... }  // returns a real MapBackedVendorMappingSnapshot
 }
 ```
 
@@ -314,7 +317,7 @@ Then assert on `appender.list` for level=WARN, count, and message-format-expande
 | `src/main/java/com/rapid7/integrationregistry/aggregator/ResolvedInstance.java` | New pkg-private record | TODO |
 | `src/main/java/com/rapid7/integrationregistry/aggregator/DataSourceIdMinter.java` | Existing — adds public String overload | EDIT |
 | `src/test/java/com/rapid7/integrationregistry/aggregator/VendorAggregatorTest.java` | New test class | TODO |
-| `src/test/java/com/rapid7/integrationregistry/aggregator/FakeVendorMappingSnapshot.java` | New test fake | TODO |
+| `src/test/java/com/rapid7/integrationregistry/mapping/MapBackedSnapshotBuilder.java` | New test builder over the real `MapBackedVendorMappingSnapshot` (replaces the originally-planned `FakeVendorMappingSnapshot`) | TODO |
 | `src/test/java/com/rapid7/integrationregistry/aggregator/NormalizedIntegrationFixtures.java` | New test helpers | TODO |
 | `src/test/java/com/rapid7/integrationregistry/aggregator/DataSourceIdMinterStringOverloadTest.java` | New sibling test class for the String overload (round-trips, validation, equivalence with enum overload). Existing `DataSourceIdMinterTest.java` stays unchanged. | NEW |
 
