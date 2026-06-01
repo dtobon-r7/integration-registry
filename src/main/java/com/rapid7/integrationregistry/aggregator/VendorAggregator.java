@@ -33,6 +33,24 @@ import org.springframework.stereotype.Component;
  * per-data-source {@code displayName}. Unmapped triplets — including those where the raw strings
  * don't even resolve to {@link ProductName} or {@link SourceType} enum members — fold into {@link
  * VendorResolution#unknown()} and emit a single WARN per distinct triplet per call.
+ *
+ * <p><b>Thread safety:</b> safe for concurrent invocation by multiple coordinator threads on the
+ * same singleton instance — the {@code snapshot} field is final and immutable, and all per-call
+ * WARN-dedup state ({@code Set<TripletKey>} for unmapped triplets, {@code Set<String>} for
+ * bundle-integrity conflicts) lives on the stack. Adding any instance field beyond {@code snapshot}
+ * would require revisiting this contract.
+ *
+ * <p><b>Adapter wire-form expectations:</b> each {@link NormalizedIntegration} is expected to carry
+ * {@code productName} and {@code sourceIdentifier.sourceType} in their canonical wire-form per
+ * {@link com.rapid7.integrationregistry.adapter.IntegrationAdapter#productName()} and {@link
+ * SourceType#wireForm()}. The unmapped-triplet WARN dedup keys on the raw strings, so casing or
+ * whitespace drift between adapters would be treated as distinct triplets and produce duplicate
+ * WARNs.
+ *
+ * <p><b>Unmappable-enum branch log semantics:</b> when {@link ProductName#fromWireForm} or {@link
+ * SourceType#fromWireForm} returns empty, the snapshot is never consulted — the WARN's {@code
+ * mappingVersion} field is therefore informational (it's the version that <em>would</em> have been
+ * queried), not diagnostic of a bundle gap.
  */
 // VendorAggregator is the projection hub: it touches NormalizedIntegration plus all four
 // projection records and the resolution support types. The 17-type coupling is structural
