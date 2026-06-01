@@ -2,6 +2,13 @@ package com.rapid7.integrationregistry.aggregator;
 
 import com.rapid7.integrationregistry.adapter.IntegrationStatus;
 import com.rapid7.integrationregistry.adapter.NormalizedIntegration;
+import com.rapid7.integrationregistry.aggregator.projection.DataSourceDetail;
+import com.rapid7.integrationregistry.aggregator.projection.IntegrationDetail;
+import com.rapid7.integrationregistry.aggregator.projection.IntegrationTypeCount;
+import com.rapid7.integrationregistry.aggregator.projection.VendorCard;
+import com.rapid7.integrationregistry.aggregator.projection.VendorScopedView;
+import com.rapid7.integrationregistry.aggregator.projection.VendorServiceCard;
+import com.rapid7.integrationregistry.aggregator.projection.VendorServiceDetail;
 import com.rapid7.integrationregistry.mapping.ProductName;
 import com.rapid7.integrationregistry.mapping.SourceType;
 import com.rapid7.integrationregistry.mapping.VendorMappingSnapshot;

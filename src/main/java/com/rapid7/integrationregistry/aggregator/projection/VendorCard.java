@@ -1,4 +1,4 @@
-package com.rapid7.integrationregistry.aggregator;
+package com.rapid7.integrationregistry.aggregator.projection;
 
 import java.util.Objects;
 
