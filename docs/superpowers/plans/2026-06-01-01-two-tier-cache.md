@@ -66,7 +66,7 @@ Insert after the `archunit-junit5` dependency (around `pom.xml:46`). Versions ar
 		</dependency>
 		<dependency>
 			<groupId>org.testcontainers</groupId>
-			<artifactId>junit-jupiter</artifactId>
+			<artifactId>testcontainers-junit-jupiter</artifactId>
 			<scope>test</scope>
 		</dependency>
 ```

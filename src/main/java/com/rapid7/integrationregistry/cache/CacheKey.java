@@ -5,8 +5,8 @@ package com.rapid7.integrationregistry.cache;
  * ir:cache:{tier}:{orgId}:{productName}}.
  *
  * <p>This is deliberately the only place a cache key is built: the two tiers stay independent
- * because their keys differ by the {@code tier} segment, and a future change to a user-scoped key
- * — {@code (orgId, userId, productName)} — touches only this method and its direct callers.
+ * because their keys differ by the {@code tier} segment, and a future change to a user-scoped key —
+ * {@code (orgId, userId, productName)} — touches only this method and its direct callers.
  *
  * <p>Assumption: {@code orgId} and {@code productName} are platform-controlled values that do not
  * contain the {@code ':'} delimiter ({@code productName} is the RFC-canonical frozen string set;

@@ -17,8 +17,7 @@ class CachePropertiesBindingTest {
   void binding_shouldApplyConfiguredTtls_whenPropertiesPresent() {
     runner
         .withPropertyValues(
-            "integration-registry.cache.fresh-ttl=10m",
-            "integration-registry.cache.stale-ttl=48h")
+            "integration-registry.cache.fresh-ttl=10m", "integration-registry.cache.stale-ttl=48h")
         .run(
             context -> {
               CacheProperties props = context.getBean(CacheProperties.class);

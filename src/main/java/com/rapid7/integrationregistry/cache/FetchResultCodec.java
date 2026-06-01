@@ -23,8 +23,7 @@ class FetchResultCodec {
 
   private static final Logger log = LoggerFactory.getLogger(FetchResultCodec.class);
   private static final int CURRENT_VERSION = 1;
-
-  private final ObjectMapper mapper =
+  private static final ObjectMapper MAPPER =
       JsonMapper.builder().addModule(new JavaTimeModule()).build();
 
   /** JSON envelope wrapping a payload with its schema version. */
@@ -35,7 +34,7 @@ class FetchResultCodec {
 
   String encode(FetchResult result) {
     try {
-      return mapper.writeValueAsString(new Envelope(CURRENT_VERSION, result));
+      return MAPPER.writeValueAsString(new Envelope(CURRENT_VERSION, result));
     } catch (JsonProcessingException e) {
       // FetchResult is a plain record of serializable fields; this should not happen.
       throw new IllegalStateException("Failed to encode FetchResult for cache", e);
@@ -47,7 +46,7 @@ class FetchResultCodec {
       return Optional.empty();
     }
     try {
-      Envelope envelope = mapper.readValue(json, Envelope.class);
+      Envelope envelope = MAPPER.readValue(json, Envelope.class);
       if (envelope.v() != CURRENT_VERSION || envelope.payload() == null) {
         log.debug("Cache payload version {} not readable; treating as miss", envelope.v());
         return Optional.empty();

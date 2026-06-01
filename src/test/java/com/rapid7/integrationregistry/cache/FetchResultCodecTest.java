@@ -37,7 +37,8 @@ class FetchResultCodecTest {
   @Test
   void decode_shouldReturnEmpty_whenVersionIsUnknown() {
     // Arrange — a future/unknown envelope version
-    String json = "{\"v\":999,\"payload\":{\"integrations\":[],\"fetchedAt\":\"2026-06-01T12:00:00Z\"}}";
+    String json =
+        "{\"v\":999,\"payload\":{\"integrations\":[],\"fetchedAt\":\"2026-06-01T12:00:00Z\"}}";
 
     // Act
     Optional<FetchResult> decoded = codec.decode(json);
