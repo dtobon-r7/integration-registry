@@ -107,11 +107,6 @@ public final class BundleParser {
     }
   }
 
-  // Allocating one VendorResolution and one TripletKey per data source IS the
-  // contract here: the snapshot's index is keyed by triplet and valued by
-  // resolution, so each entry must be minted fresh. Hoisting the allocations
-  // out of the loop would defeat indexing.
-  @SuppressWarnings("PMD.AvoidInstantiatingObjectsInLoops")
   private VendorMappingSnapshot buildSnapshot(JsonNode tree) {
     String mappingVersion = tree.at("/metadata/mapping_version").asText();
     Map<Object, VendorResolution> index = new HashMap<>();
