@@ -1,6 +1,7 @@
 package com.rapid7.integrationregistry.cache;
 
 import com.rapid7.integrationregistry.adapter.FetchResult;
+import java.util.Objects;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,8 +48,14 @@ public class IntegrationCache {
         .map(result -> new StaleEntry(result, result.fetchedAt()));
   }
 
-  /** Write-on-success: populate fresh AND refresh stale. The only write path. */
+  /**
+   * Write-on-success: populate fresh AND refresh stale. The only write path.
+   *
+   * <p>The two SETs are not atomic; a partial write (fresh written, stale not) is safe (a cache
+   * miss is always valid) but degrades stale-fallback until the next successful write.
+   */
   public void writeOnSuccess(String orgId, String productName, FetchResult result) {
+    Objects.requireNonNull(result, "result");
     String json = codec.encode(result);
     try {
       redis

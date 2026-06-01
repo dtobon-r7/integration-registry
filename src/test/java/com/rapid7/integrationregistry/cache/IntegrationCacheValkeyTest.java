@@ -31,6 +31,7 @@ import org.springframework.test.context.TestPropertySource;
 @TestPropertySource(
     properties = {
       "integration-registry.cache.fresh-ttl=1s",
+      "integration-registry.cache.stale-ttl=10s",
       "management.endpoint.health.group.readiness.include="
     })
 class IntegrationCacheValkeyTest extends ValkeyTestContainer {

@@ -1,6 +1,7 @@
 package com.rapid7.integrationregistry.cache;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
 
@@ -32,5 +33,35 @@ class CacheKeyTest {
 
     // Assert — distinct keys are what make the two tiers independent in Valkey
     assertThat(fresh).isNotEqualTo(stale);
+  }
+
+  @Test
+  void of_shouldThrow_whenOrgIdNull() {
+    // Act / Assert
+    assertThatThrownBy(() -> CacheKey.of(CacheTier.FRESH, null, "InsightConnect"))
+        .isInstanceOf(NullPointerException.class);
+  }
+
+  @Test
+  void of_shouldThrow_whenProductNameNull() {
+    // Act / Assert
+    assertThatThrownBy(() -> CacheKey.of(CacheTier.FRESH, "org-123", null))
+        .isInstanceOf(NullPointerException.class);
+  }
+
+  @Test
+  void of_shouldThrow_whenOrgIdContainsColon() {
+    // Act / Assert
+    assertThatThrownBy(() -> CacheKey.of(CacheTier.FRESH, "org:evil", "InsightConnect"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("orgId must not contain ':'");
+  }
+
+  @Test
+  void of_shouldThrow_whenProductNameContainsColon() {
+    // Act / Assert
+    assertThatThrownBy(() -> CacheKey.of(CacheTier.FRESH, "org-123", "Product:Evil"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("productName must not contain ':'");
   }
 }
