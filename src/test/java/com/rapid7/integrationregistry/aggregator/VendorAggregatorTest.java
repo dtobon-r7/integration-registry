@@ -509,11 +509,13 @@ class VendorAggregatorTest {
       // Canonical data_source_id locked here — RFC §data_source_id construction
       assertThat(idrDs.dataSourceId())
           .isEqualTo("insightidr|product_type|microsoft-defender-endpoint");
+      assertThat(idrDs.displayName()).isEqualTo("microsoft-defender-endpoint");
       assertThat(idrDs.integrationsCount()).isEqualTo(2);
       assertThat(idrDs.status()).isEqualTo(IntegrationStatus.ERROR);
       assertThat(idrDs.integrations()).hasSize(2);
 
       assertThat(iconDs.dataSourceId()).isEqualTo("insightconnect|plugin_name|microsoft-defender");
+      assertThat(iconDs.displayName()).isEqualTo("microsoft-defender");
       assertThat(iconDs.integrationsCount()).isEqualTo(1);
       assertThat(iconDs.status()).isEqualTo(IntegrationStatus.HEALTHY);
     }
