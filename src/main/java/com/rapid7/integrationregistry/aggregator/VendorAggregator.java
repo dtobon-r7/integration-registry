@@ -52,8 +52,6 @@ public final class VendorAggregator {
 
   private static final String FIELD_INSTANCES = "instances";
 
-  private static final String SUPPRESS_LAZY_BUCKET_ALLOC = "PMD.AvoidInstantiatingObjectsInLoops";
-
   private final VendorMappingSnapshot snapshot;
 
   public VendorAggregator(VendorMappingSnapshot snapshot) {
@@ -168,10 +166,6 @@ public final class VendorAggregator {
 
   // ----- vendor-service cards -----
 
-  // Per-vendor-service buckets are minted lazily via computeIfAbsent — one ArrayList per
-  // distinct vendorServiceId, never per iteration. Hoisting the allocation outside the loop
-  // would defeat the grouping.
-  @SuppressWarnings(SUPPRESS_LAZY_BUCKET_ALLOC)
   private List<VendorServiceCard> buildVendorServiceCards(List<ResolvedInstance> resolved) {
     Map<String, List<ResolvedInstance>> byVendorServiceId = new LinkedHashMap<>();
     for (ResolvedInstance r : resolved) {
@@ -207,10 +201,6 @@ public final class VendorAggregator {
         latestSuccess(group));
   }
 
-  // computeIfAbsent mints one int[2] counter array per distinct integrationType — never per
-  // iteration. Hoisting the allocation outside the loop would defeat the grouping; the same
-  // pattern is used in groupByDataSourceId and buildVendorServiceCards above.
-  @SuppressWarnings(SUPPRESS_LAZY_BUCKET_ALLOC)
   private static List<IntegrationTypeCount> integrationTypeCounts(List<ResolvedInstance> group) {
     Map<String, int[]> totals = new LinkedHashMap<>();
     for (ResolvedInstance r : group) {
@@ -247,10 +237,6 @@ public final class VendorAggregator {
     return max;
   }
 
-  // Per-data-source buckets are minted lazily via computeIfAbsent — one ArrayList per
-  // distinct dataSourceId, never per iteration. Hoisting the allocation outside the loop
-  // would defeat the grouping.
-  @SuppressWarnings(SUPPRESS_LAZY_BUCKET_ALLOC)
   private static Map<String, List<ResolvedInstance>> groupByDataSourceId(
       List<ResolvedInstance> group) {
     Map<String, List<ResolvedInstance>> by = new LinkedHashMap<>();
@@ -295,11 +281,6 @@ public final class VendorAggregator {
         dataSources);
   }
 
-  // Per-element projection record allocation, not a lazy bucket — same fundamental pattern as
-  // the lazy-bucket sites: per-element record minting that cannot be hoisted out of the loop
-  // without changing the projection semantics. Reuses the existing constant for symmetry with
-  // the four other suppression sites in this class.
-  @SuppressWarnings(SUPPRESS_LAZY_BUCKET_ALLOC)
   private static DataSourceDetail buildDataSourceDetail(List<ResolvedInstance> dsGroup) {
     ResolvedInstance first = dsGroup.get(0);
     NormalizedIntegration firstInstance = first.instance();
@@ -343,11 +324,6 @@ public final class VendorAggregator {
 
   // ----- vendor cards -----
 
-  // Per-vendor accumulators are minted lazily via computeIfAbsent — one VendorAccumulator per
-  // distinct vendorId, never per iteration. Hoisting the allocation outside the loop would
-  // defeat the grouping; the same pattern is used in groupByDataSourceId and
-  // integrationTypeCounts above.
-  @SuppressWarnings(SUPPRESS_LAZY_BUCKET_ALLOC)
   private static List<VendorCard> buildVendorCards(List<ResolvedInstance> resolved) {
     // vendorId -> (vendorName, set-of-vendorServiceIds)
     Map<String, VendorAccumulator> byVendorId = new LinkedHashMap<>();
