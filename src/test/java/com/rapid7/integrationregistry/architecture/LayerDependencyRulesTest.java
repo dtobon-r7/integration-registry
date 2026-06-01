@@ -27,6 +27,10 @@ class LayerDependencyRulesTest {
       LayerDependencyRules.coordinatorLayer_shouldNotDependOnDisallowedLayers;
 
   @ArchTest
+  static final ArchRule cacheLayer_shouldNotDependOnDisallowedLayers =
+      LayerDependencyRules.cacheLayer_shouldNotDependOnDisallowedLayers;
+
+  @ArchTest
   static final ArchRule aggregatorLayer_shouldOnlyDependOnAdapterAndMapping =
       LayerDependencyRules.aggregatorLayer_shouldOnlyDependOnAdapterAndMapping;
 

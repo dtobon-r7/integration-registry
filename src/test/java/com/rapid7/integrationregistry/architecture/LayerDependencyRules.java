@@ -43,6 +43,15 @@ final class LayerDependencyRules {
           .dependOnClassesThat()
           .resideInAnyPackage("..controller..", "..service..", "..aggregator..", "..mapping..");
 
+  static final ArchRule cacheLayer_shouldNotDependOnDisallowedLayers =
+      noClasses()
+          .that()
+          .resideInAPackage("..cache..")
+          .should()
+          .dependOnClassesThat()
+          .resideInAnyPackage(
+              "..controller..", "..service..", "..aggregator..", "..coordinator..", "..mapping..");
+
   static final ArchRule aggregatorLayer_shouldOnlyDependOnAdapterAndMapping =
       noClasses()
           .that()
