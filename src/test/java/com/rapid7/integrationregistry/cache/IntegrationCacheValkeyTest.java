@@ -80,7 +80,7 @@ class IntegrationCacheValkeyTest extends ValkeyTestContainer {
     cache.writeOnSuccess(ORG, PRODUCT, result);
 
     // Act — simulate fresh-tier expiry by deleting only the fresh key; stale must survive
-    redis.delete("ir:cache:fresh:" + ORG + ":" + PRODUCT);
+    redis.delete(CacheKey.of(CacheTier.FRESH, ORG, PRODUCT));
 
     // Assert — tiers are independent: fresh is a miss, stale is still served
     assertThat(cache.readFresh(ORG, PRODUCT)).isEmpty();
@@ -105,7 +105,7 @@ class IntegrationCacheValkeyTest extends ValkeyTestContainer {
   @Test
   void readFresh_shouldReturnEmpty_whenStoredPayloadIsCorrupt() {
     // Arrange — a corrupt value written directly under the fresh key
-    redis.opsForValue().set("ir:cache:fresh:" + ORG + ":corrupt", "not a valid envelope");
+    redis.opsForValue().set(CacheKey.of(CacheTier.FRESH, ORG, "corrupt"), "not a valid envelope");
 
     // Act / Assert — decode failure is a miss, never an exception
     assertThat(cache.readFresh(ORG, "corrupt")).isEmpty();
