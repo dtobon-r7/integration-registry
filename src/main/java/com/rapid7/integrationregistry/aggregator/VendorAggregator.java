@@ -8,6 +8,7 @@ import com.rapid7.integrationregistry.mapping.VendorMappingSnapshot;
 import com.rapid7.integrationregistry.mapping.VendorResolution;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -106,7 +107,8 @@ public final class VendorAggregator {
     }
     List<ResolvedInstance> resolved = resolveAll(instances);
     Set<String> warnedConflicts = new HashSet<>();
-    return buildVendorCards(resolved, warnedConflicts);
+    warnIfVendorCardsHaveNameInconsistencies(resolved, warnedConflicts);
+    return buildVendorCards(resolved);
   }
 
   public Optional<VendorScopedView> toVendorScopedView(
@@ -377,6 +379,7 @@ public final class VendorAggregator {
   private VendorScopedView buildVendorScopedView(
       List<ResolvedInstance> scoped, Set<String> warnedConflicts) {
     VendorResolution v = scoped.get(0).resolution();
+    warnIfVendorNameInconsistent(v.vendorId(), v.vendorName(), scoped, warnedConflicts);
     List<VendorServiceCard> services = buildVendorServiceCards(scoped, warnedConflicts);
     IntegrationStatus aggregate =
         services.stream()
@@ -388,29 +391,37 @@ public final class VendorAggregator {
         v.vendorId(), v.vendorName(), services.size(), aggregate, lastUpdated, services);
   }
 
+  private void warnIfVendorNameInconsistent(
+      String vendorId,
+      String canonicalName,
+      List<ResolvedInstance> scoped,
+      Set<String> warnedConflicts) {
+    for (int i = 1; i < scoped.size(); i++) {
+      String otherName = scoped.get(i).resolution().vendorName();
+      if (!canonicalName.equals(otherName)) {
+        String dedupKey = "vendor:" + vendorId;
+        if (warnedConflicts.add(dedupKey)) {
+          LOG.warn(
+              VENDOR_NAME_CONFLICT_LOG_FORMAT,
+              vendorId,
+              canonicalName,
+              otherName,
+              snapshot.mappingVersion());
+        }
+        return;
+      }
+    }
+  }
+
   // ----- vendor cards -----
 
-  private List<VendorCard> buildVendorCards(
-      List<ResolvedInstance> resolved, Set<String> warnedConflicts) {
+  private static List<VendorCard> buildVendorCards(List<ResolvedInstance> resolved) {
     // vendorId -> (vendorName, set-of-vendorServiceIds)
     Map<String, VendorAccumulator> byVendorId = new LinkedHashMap<>();
     for (ResolvedInstance r : resolved) {
       VendorResolution res = r.resolution();
-      VendorAccumulator acc = byVendorId.get(res.vendorId());
-      if (acc == null) {
-        acc = new VendorAccumulator(res.vendorName());
-        byVendorId.put(res.vendorId(), acc);
-      } else if (!acc.vendorName.equals(res.vendorName())) {
-        String dedupKey = "vendor:" + res.vendorId();
-        if (warnedConflicts.add(dedupKey)) {
-          LOG.warn(
-              VENDOR_NAME_CONFLICT_LOG_FORMAT,
-              res.vendorId(),
-              acc.vendorName,
-              res.vendorName(),
-              snapshot.mappingVersion());
-        }
-      }
+      VendorAccumulator acc =
+          byVendorId.computeIfAbsent(res.vendorId(), k -> new VendorAccumulator(res.vendorName()));
       acc.vendorServiceIds.add(res.vendorServiceId());
     }
     List<VendorCard> cards = new ArrayList<>(byVendorId.size());
@@ -420,6 +431,26 @@ public final class VendorAggregator {
               e.getKey(), e.getValue().vendorName, e.getValue().vendorServiceIds.size()));
     }
     return cards;
+  }
+
+  private void warnIfVendorCardsHaveNameInconsistencies(
+      List<ResolvedInstance> resolved, Set<String> warnedConflicts) {
+    Map<String, String> firstSeenName = new HashMap<>();
+    for (ResolvedInstance r : resolved) {
+      VendorResolution res = r.resolution();
+      String canonical = firstSeenName.putIfAbsent(res.vendorId(), res.vendorName());
+      if (canonical != null && !canonical.equals(res.vendorName())) {
+        String dedupKey = "vendor:" + res.vendorId();
+        if (warnedConflicts.add(dedupKey)) {
+          LOG.warn(
+              VENDOR_NAME_CONFLICT_LOG_FORMAT,
+              res.vendorId(),
+              canonical,
+              res.vendorName(),
+              snapshot.mappingVersion());
+        }
+      }
+    }
   }
 
   private static final class VendorAccumulator {

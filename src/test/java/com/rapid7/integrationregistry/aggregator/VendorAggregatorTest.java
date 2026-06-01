@@ -910,5 +910,64 @@ class VendorAggregatorTest {
           .contains("Microsoft Corporation")
           .contains(MAPPING_VERSION);
     }
+
+    @Test
+    void toVendorScopedView_shouldEmitWarn_whenVendorNameDiffersAcrossInstances() {
+      // Arrange — same vendor_id "microsoft" but two different vendor names across
+      // ResolvedInstance entries within the scoped vendor view.
+      VendorResolution defenderA =
+          new VendorResolution(
+              "microsoft-defender",
+              "Microsoft Defender",
+              VendorCategory.EDR,
+              "microsoft",
+              "Microsoft");
+      VendorResolution defenderB =
+          new VendorResolution(
+              "microsoft-sentinel",
+              "Microsoft Sentinel",
+              VendorCategory.SIEM,
+              "microsoft",
+              "Microsoft Corporation");
+
+      VendorMappingSnapshot snapshot =
+          FakeVendorMappingSnapshot.with(MAPPING_VERSION)
+              .map(
+                  ProductName.INSIGHT_IDR,
+                  SourceType.PRODUCT_TYPE,
+                  "microsoft-defender-endpoint",
+                  defenderA)
+              .map(
+                  ProductName.INSIGHT_IDR, SourceType.PRODUCT_TYPE, "microsoft-sentinel", defenderB)
+              .build();
+
+      List<NormalizedIntegration> instances =
+          List.of(
+              NormalizedIntegrationFixtures.idrInstance(
+                  "es_1", "microsoft-defender-endpoint", IntegrationStatus.HEALTHY),
+              NormalizedIntegrationFixtures.idrInstance(
+                  "es_2", "microsoft-sentinel", IntegrationStatus.HEALTHY));
+
+      // Act
+      aggregatorWith(snapshot).toVendorScopedView("microsoft", instances);
+
+      // Assert — exactly one bundle-integrity WARN
+      long bundleWarns =
+          appender.list.stream()
+              .filter(e -> e.getFormattedMessage().contains("Bundle integrity"))
+              .count();
+      assertThat(bundleWarns).isEqualTo(1);
+      String msg =
+          appender.list.stream()
+              .filter(e -> e.getFormattedMessage().contains("Bundle integrity"))
+              .findFirst()
+              .orElseThrow()
+              .getFormattedMessage();
+      assertThat(msg)
+          .contains("microsoft")
+          .contains("Microsoft")
+          .contains("Microsoft Corporation")
+          .contains(MAPPING_VERSION);
+    }
   }
 }
