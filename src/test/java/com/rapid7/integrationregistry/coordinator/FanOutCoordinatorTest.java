@@ -3,6 +3,7 @@ package com.rapid7.integrationregistry.coordinator;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -91,6 +92,29 @@ class FanOutCoordinatorTest {
               assertThat(unavailable.productName()).isEqualTo("InsightIDR");
               assertThat(unavailable.reason()).isEqualTo("auth_failure");
               assertThat(unavailable.stale()).isFalse();
+            });
+  }
+
+  @Test
+  void fetchAll_shouldFetchWriteAndServe_whenFreshMissAndAdapterSucceeds() {
+    // Arrange: fresh + stale miss (defaults), adapter returns data
+    var adapter = CoordinatorAdapterFixtures.success("InsightConnect");
+    FanOutCoordinator coordinator = new FanOutCoordinator(Set.of(adapter), cache, props());
+
+    // Act
+    List<ProductOutcome> outcomes = coordinator.fetchAll(ORG, new HttpHeaders());
+
+    // Assert: adapter called once, fresh tier written, served non-stale non-cache-hit
+    assertThat(adapter.callCount()).isEqualTo(1);
+    verify(cache).writeOnSuccess(eq(ORG), eq("InsightConnect"), any(FetchResult.class));
+    assertThat(outcomes).hasSize(1);
+    assertThat(outcomes.get(0))
+        .isInstanceOfSatisfying(
+            ProductOutcome.Served.class,
+            served -> {
+              assertThat(served.cacheHitPerProduct()).isFalse();
+              assertThat(served.stale()).isFalse();
+              assertThat(served.integrations()).hasSize(1);
             });
   }
 }
