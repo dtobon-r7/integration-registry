@@ -1,13 +1,20 @@
 # Testing — Integration Registry
 
 > The Registry has no database. RFC-001 v2 makes vendor mapping a YAML
-> bundle fetched from S3 once at boot. There is no JPA, no @DataJpaTest,
-> no TestContainers, no LocalStack. Tests stay Docker-free at unit and
-> integration time.
+> bundle fetched from S3 once at boot — that dependency is mocked at the
+> bean boundary (no JPA, no @DataJpaTest, no LocalStack).
 >
-> One consequence: this service does NOT use the *IT.java suffix or
-> maven-failsafe-plugin. All tests run under `mvn test` / `mvn verify`
-> directly.
+> **Exception (ADR-006): the Valkey cache (T07) is tested with
+> Testcontainers** against `valkey/valkey:8-alpine`. The cache's
+> correctness lives in behaviors only a real server exercises — TTL
+> expiry, serialization round-trip, keyspace independence — so those
+> tests require a running Docker daemon. Everything outside the cache
+> stays Docker-free.
+>
+> Consequence: `mvn verify` now requires Docker for the cache tests.
+> Tests still run under `mvn test` / `mvn verify` directly — there is
+> no *IT.java suffix or maven-failsafe split; the Testcontainers-backed
+> cache tests run under Surefire like the rest.
 
 ## Testing pyramid
 
@@ -29,6 +36,7 @@ authors, not build gates.
 | HTTP edge of a controller (status codes, validation, JSON shape) | controller slice |
 | End-to-end orchestration with adapters mocked | Spring-context integration |
 | How an adapter parses upstream JSON | adapter contract test |
+| Cache behavior against real Valkey (TTL expiry, serialization round-trip, tier independence) | Testcontainers integration test (ADR-006; Docker required) |
 
 ## Naming and structure
 

@@ -1,6 +1,11 @@
 spring:
   application:
     name: integration-registry
+  data:
+    redis:
+      host: ${REGISTRY_VALKEY_HOST:localhost}
+      port: ${REGISTRY_VALKEY_PORT:6379}
+      timeout: 250ms
 
 server:
   port: 8080
@@ -19,6 +24,9 @@ management:
           include: readinessState,bundleLoad
 
 integration-registry:
+  cache:
+    fresh-ttl: 5m
+    stale-ttl: 24h
   vendor-mapping:
     cache-dir: ${java.io.tmpdir}/integration-registry/vendor-mapping
     # bundle-version, s3-bucket, s3-key-prefix come from the deploy environment.
