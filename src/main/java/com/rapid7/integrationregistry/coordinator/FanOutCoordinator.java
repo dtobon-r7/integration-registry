@@ -2,9 +2,7 @@ package com.rapid7.integrationregistry.coordinator;
 
 import com.rapid7.integrationregistry.adapter.FetchResult;
 import com.rapid7.integrationregistry.adapter.IntegrationAdapter;
-import com.rapid7.integrationregistry.adapter.exception.AdapterException;
 import com.rapid7.integrationregistry.cache.IntegrationCache;
-import com.rapid7.integrationregistry.cache.StaleEntry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -25,12 +23,13 @@ import org.springframework.stereotype.Component;
 /**
  * Request-time orchestration seam between the {@link IntegrationAdapter}s and the read API (T09).
  * Dispatches all registered adapters in parallel under a per-adapter timeout and a total request
- * deadline, isolates per-adapter failures, applies the stale-tier fallback decision tree against
- * the {@link IntegrationCache}, and returns a structured {@link ProductOutcome} per product.
+ * deadline, isolates per-adapter failures, and delegates the stale-tier fallback decision tree and
+ * all {@link ProductOutcome} construction to the {@link OutcomeClassifier}, returning a structured
+ * {@link ProductOutcome} per product.
  *
  * <p>The single invariant: one adapter's failure never fails the request (RFC-001 §Fan-out
  * coordinator). No retry — one {@code fetch} per adapter per request. Failure reasons are sourced
- * from {@link AdapterException#reasonCode()} (ADR-001), never re-derived here.
+ * from {@code AdapterException.reasonCode()} (ADR-001) by the classifier, never re-derived here.
  *
  * <p>Adapters use blocking {@code RestClient} (ADR-002); a per-call virtual-thread executor makes
  * the dispatch truly concurrent. Requires {@code spring.threads.virtual.enabled=true}.
@@ -39,18 +38,18 @@ import org.springframework.stereotype.Component;
 public class FanOutCoordinator {
 
   private static final Logger log = LoggerFactory.getLogger(FanOutCoordinator.class);
-  private static final String REASON_TIMEOUT = "timeout";
-  private static final String REASON_NO_DATA = "no_data";
 
   private final Set<IntegrationAdapter> adapters;
   private final IntegrationCache cache;
   private final CoordinatorProperties properties;
+  private final OutcomeClassifier classifier;
 
   public FanOutCoordinator(
       Set<IntegrationAdapter> adapters, IntegrationCache cache, CoordinatorProperties properties) {
     this.adapters = adapters;
     this.cache = cache;
     this.properties = properties;
+    this.classifier = new OutcomeClassifier(cache);
   }
 
   /**
@@ -72,7 +71,7 @@ public class FanOutCoordinator {
         String product = adapter.productName();
         Optional<FetchResult> fresh = cache.readFresh(orgId, product);
         if (fresh.isPresent()) {
-          outcomes.add(servedFresh(product, fresh.get()));
+          outcomes.add(classifier.servedFresh(product, fresh.get()));
         } else {
           Future<FetchResult> future = executor.submit(() -> adapter.fetch(orgId, authHeaders));
           dispatches.add(new Dispatch(product, future));
@@ -94,8 +93,8 @@ public class FanOutCoordinator {
     long untilDeadlineMs = Duration.between(Instant.now(), deadline).toMillis();
     long waitMs = Math.max(0, Math.min(perAdapterMs, untilDeadlineMs));
     try {
-      FetchResult result = dispatch.future().get(waitMs, TimeUnit.MILLISECONDS);
-      return classifySuccess(product, orgId, result);
+      return classifier.classifySuccess(
+          orgId, product, dispatch.future().get(waitMs, TimeUnit.MILLISECONDS));
     } catch (TimeoutException e) {
       dispatch.future().cancel(true);
       // Distinguish the binding budget: if the total-request deadline left less headroom than the
@@ -108,63 +107,14 @@ public class FanOutCoordinator {
           product,
           waitMs,
           boundBy);
-      return staleOrUnavailable(orgId, product, REASON_TIMEOUT);
+      return classifier.onTransientTimeout(orgId, product);
     } catch (ExecutionException e) {
-      return classifyFailure(orgId, product, e.getCause());
+      return classifier.classifyFailure(orgId, product, e.getCause());
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       dispatch.future().cancel(true);
-      return staleOrUnavailable(orgId, product, REASON_TIMEOUT);
+      return classifier.onTransientTimeout(orgId, product);
     }
-  }
-
-  private ProductOutcome classifySuccess(String product, String orgId, FetchResult result) {
-    if (result.integrations().isEmpty()) {
-      // Successful-but-empty: serve stale if usable, else no_data. Empty success is NOT cached.
-      return staleOrUnavailable(orgId, product, REASON_NO_DATA);
-    }
-    cache.writeOnSuccess(orgId, product, result);
-    return new ProductOutcome.Served(
-        product, result.integrations(), result.fetchedAt(), false, false, Optional.empty());
-  }
-
-  private ProductOutcome classifyFailure(String orgId, String product, Throwable cause) {
-    if (cause instanceof AdapterException adapterException) {
-      // Stale-tier fallback is scoped to transient failures (timeout, upstream_5xx) per ADR-001 and
-      // RFC-001 §Stale-tier fallback. A PERMANENT failure (auth_failure) must omit the product
-      // outright — never read or serve stale. reason is always sourced from reasonCode(), never
-      // re-derived from the exception class.
-      if (adapterException.isTransient()) {
-        return staleOrUnavailable(orgId, product, adapterException.reasonCode());
-      }
-      return new ProductOutcome.Unavailable(product, adapterException.reasonCode(), false);
-    }
-    // An unexpected (non-AdapterException) cause is an adapter-contract violation, not partial
-    // unavailability — surface it so T09's @ControllerAdvice maps it to 500. Never silently
-    // dropped.
-    throw new IllegalStateException(
-        "Adapter " + product + " failed with an unexpected exception", cause);
-  }
-
-  /** Stale-fallback decision: serve stale within window, else omit with the given reason. */
-  private ProductOutcome staleOrUnavailable(String orgId, String product, String reason) {
-    Optional<StaleEntry> stale = cache.readStale(orgId, product);
-    if (stale.isPresent()) {
-      StaleEntry entry = stale.get();
-      return new ProductOutcome.Served(
-          product,
-          entry.result().integrations(),
-          entry.result().fetchedAt(),
-          false,
-          true,
-          Optional.of(entry.staleSince()));
-    }
-    return new ProductOutcome.Unavailable(product, reason, false);
-  }
-
-  private ProductOutcome servedFresh(String product, FetchResult result) {
-    return new ProductOutcome.Served(
-        product, result.integrations(), result.fetchedAt(), true, false, Optional.empty());
   }
 
   private record Dispatch(String product, Future<FetchResult> future) {}
