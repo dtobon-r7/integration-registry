@@ -186,4 +186,51 @@ class FanOutCoordinatorTest {
             ProductOutcome.Unavailable.class, u -> assertThat(u.reason()).isEqualTo("no_data"));
     verify(cache, never()).writeOnSuccess(anyString(), anyString(), any());
   }
+
+  @Test
+  void fetchAll_shouldServeStale_whenAdapterFailsAndStaleWithinWindow() {
+    // Arrange: adapter times out, stale entry exists
+    Instant staleSince = Instant.parse("2026-05-31T09:00:00Z");
+    FetchResult staleResult = CoordinatorAdapterFixtures.sampleResult("InsightIDR", staleSince);
+    when(cache.readStale(ORG, "InsightIDR"))
+        .thenReturn(Optional.of(new StaleEntry(staleResult, staleSince)));
+    var adapter =
+        CoordinatorAdapterFixtures.throwing("InsightIDR", new AdapterUpstreamException("503"));
+    FanOutCoordinator coordinator = new FanOutCoordinator(Set.of(adapter), cache, props());
+
+    // Act
+    List<ProductOutcome> outcomes = coordinator.fetchAll(ORG, new HttpHeaders());
+
+    // Assert: served stale with staleSince populated; never overwrites the stale tier
+    assertThat(outcomes.get(0))
+        .isInstanceOfSatisfying(
+            ProductOutcome.Served.class,
+            served -> {
+              assertThat(served.stale()).isTrue();
+              assertThat(served.staleSince()).contains(staleSince);
+              assertThat(served.cacheHitPerProduct()).isFalse();
+              assertThat(served.integrations()).hasSize(1);
+            });
+    verify(cache, never()).writeOnSuccess(anyString(), anyString(), any());
+  }
+
+  @Test
+  void fetchAll_shouldServeStale_whenEmptySuccessAndStaleWithinWindow() {
+    // Arrange: adapter returns empty, but a usable stale entry exists
+    Instant staleSince = Instant.parse("2026-05-31T09:00:00Z");
+    FetchResult staleResult = CoordinatorAdapterFixtures.sampleResult("InsightConnect", staleSince);
+    when(cache.readStale(ORG, "InsightConnect"))
+        .thenReturn(Optional.of(new StaleEntry(staleResult, staleSince)));
+    var adapter = CoordinatorAdapterFixtures.empty("InsightConnect");
+    FanOutCoordinator coordinator = new FanOutCoordinator(Set.of(adapter), cache, props());
+
+    // Act
+    List<ProductOutcome> outcomes = coordinator.fetchAll(ORG, new HttpHeaders());
+
+    // Assert: empty-success falls back to stale rather than no_data
+    assertThat(outcomes.get(0))
+        .isInstanceOfSatisfying(
+            ProductOutcome.Served.class, served -> assertThat(served.stale()).isTrue());
+    verify(cache, never()).writeOnSuccess(anyString(), anyString(), any());
+  }
 }
