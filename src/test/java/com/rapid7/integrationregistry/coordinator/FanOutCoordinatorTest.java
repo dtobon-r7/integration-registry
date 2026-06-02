@@ -11,6 +11,8 @@ import static org.mockito.Mockito.when;
 
 import com.rapid7.integrationregistry.adapter.FetchResult;
 import com.rapid7.integrationregistry.adapter.exception.AdapterAuthException;
+import com.rapid7.integrationregistry.adapter.exception.AdapterTimeoutException;
+import com.rapid7.integrationregistry.adapter.exception.AdapterUpstreamException;
 import com.rapid7.integrationregistry.cache.IntegrationCache;
 import com.rapid7.integrationregistry.cache.StaleEntry;
 import java.time.Duration;
@@ -116,5 +118,56 @@ class FanOutCoordinatorTest {
               assertThat(served.stale()).isFalse();
               assertThat(served.integrations()).hasSize(1);
             });
+  }
+
+  @Test
+  void fetchAll_shouldMapTimeoutException_toTimeoutReason() {
+    // Arrange
+    var adapter =
+        CoordinatorAdapterFixtures.throwing("InsightIDR", new AdapterTimeoutException("boom"));
+    FanOutCoordinator coordinator = new FanOutCoordinator(Set.of(adapter), cache, props());
+
+    // Act
+    List<ProductOutcome> outcomes = coordinator.fetchAll(ORG, new HttpHeaders());
+
+    // Assert
+    assertThat(outcomes.get(0))
+        .isInstanceOfSatisfying(
+            ProductOutcome.Unavailable.class, u -> assertThat(u.reason()).isEqualTo("timeout"));
+    verify(cache, never()).writeOnSuccess(anyString(), anyString(), any());
+  }
+
+  @Test
+  void fetchAll_shouldMapUpstreamException_toUpstream5xxReason() {
+    // Arrange
+    var adapter =
+        CoordinatorAdapterFixtures.throwing("InsightIDR", new AdapterUpstreamException("503"));
+    FanOutCoordinator coordinator = new FanOutCoordinator(Set.of(adapter), cache, props());
+
+    // Act
+    List<ProductOutcome> outcomes = coordinator.fetchAll(ORG, new HttpHeaders());
+
+    // Assert
+    assertThat(outcomes.get(0))
+        .isInstanceOfSatisfying(
+            ProductOutcome.Unavailable.class,
+            u -> assertThat(u.reason()).isEqualTo("upstream_5xx"));
+  }
+
+  @Test
+  void fetchAll_shouldMapAuthException_toAuthFailureReason() {
+    // Arrange
+    var adapter =
+        CoordinatorAdapterFixtures.throwing("InsightIDR", new AdapterAuthException("401"));
+    FanOutCoordinator coordinator = new FanOutCoordinator(Set.of(adapter), cache, props());
+
+    // Act
+    List<ProductOutcome> outcomes = coordinator.fetchAll(ORG, new HttpHeaders());
+
+    // Assert
+    assertThat(outcomes.get(0))
+        .isInstanceOfSatisfying(
+            ProductOutcome.Unavailable.class,
+            u -> assertThat(u.reason()).isEqualTo("auth_failure"));
   }
 }
