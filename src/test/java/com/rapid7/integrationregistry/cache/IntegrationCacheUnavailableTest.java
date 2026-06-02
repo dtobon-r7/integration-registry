@@ -87,7 +87,8 @@ class IntegrationCacheUnavailableTest {
   @Test
   void writeOnSuccess_shouldNotThrow_whenValkeyUnreachable() {
     // Arrange
-    FetchResult result = CacheFetchResultFixtures.iconResult(Instant.parse("2026-06-01T12:00:00Z"));
+    FetchResult result =
+        CacheFetchResultFixtures.iconResult("org", Instant.parse("2026-06-01T12:00:00Z"));
 
     // Act / Assert — the cache must swallow the DataAccessException; a cache outage must not
     // fail an otherwise-successful fetch

@@ -3,7 +3,9 @@ package com.rapid7.integrationregistry.cache;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.rapid7.integrationregistry.adapter.FetchResult;
@@ -24,7 +26,11 @@ class FetchResultCodec {
   private static final Logger log = LoggerFactory.getLogger(FetchResultCodec.class);
   private static final int CURRENT_VERSION = 1;
   private static final ObjectMapper MAPPER =
-      JsonMapper.builder().addModule(new JavaTimeModule()).build();
+      JsonMapper.builder()
+          .addModule(new JavaTimeModule())
+          .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+          .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+          .build();
 
   /** JSON envelope wrapping a payload with its schema version. */
   private record Envelope(@JsonProperty("v") int v, @JsonProperty("payload") FetchResult payload) {

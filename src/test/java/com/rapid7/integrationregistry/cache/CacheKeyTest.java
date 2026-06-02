@@ -36,6 +36,13 @@ class CacheKeyTest {
   }
 
   @Test
+  void of_shouldThrow_whenTierNull() {
+    // Act / Assert
+    assertThatThrownBy(() -> CacheKey.of(null, "org-123", "InsightConnect"))
+        .isInstanceOf(NullPointerException.class);
+  }
+
+  @Test
   void of_shouldThrow_whenOrgIdNull() {
     // Act / Assert
     assertThatThrownBy(() -> CacheKey.of(CacheTier.FRESH, null, "InsightConnect"))

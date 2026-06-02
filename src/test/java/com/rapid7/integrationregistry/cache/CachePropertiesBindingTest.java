@@ -38,6 +38,58 @@ class CachePropertiesBindingTest {
         });
   }
 
+  @Test
+  void binding_shouldFailContext_whenFreshTtlIsZero() {
+    runner
+        .withPropertyValues("integration-registry.cache.fresh-ttl=0s")
+        .run(
+            context -> {
+              // Assert — zero TTL must reject at startup
+              assertThat(context).hasFailed();
+              assertThat(context.getStartupFailure())
+                  .hasRootCauseMessage("freshTtl must be positive");
+            });
+  }
+
+  @Test
+  void binding_shouldFailContext_whenFreshTtlIsNegative() {
+    runner
+        .withPropertyValues("integration-registry.cache.fresh-ttl=-1s")
+        .run(
+            context -> {
+              // Assert
+              assertThat(context).hasFailed();
+              assertThat(context.getStartupFailure())
+                  .hasRootCauseMessage("freshTtl must be positive");
+            });
+  }
+
+  @Test
+  void binding_shouldFailContext_whenStaleTtlIsZero() {
+    runner
+        .withPropertyValues("integration-registry.cache.stale-ttl=0s")
+        .run(
+            context -> {
+              // Assert
+              assertThat(context).hasFailed();
+              assertThat(context.getStartupFailure())
+                  .hasRootCauseMessage("staleTtl must be positive");
+            });
+  }
+
+  @Test
+  void binding_shouldFailContext_whenStaleTtlIsNegative() {
+    runner
+        .withPropertyValues("integration-registry.cache.stale-ttl=-1s")
+        .run(
+            context -> {
+              // Assert
+              assertThat(context).hasFailed();
+              assertThat(context.getStartupFailure())
+                  .hasRootCauseMessage("staleTtl must be positive");
+            });
+  }
+
   @Configuration
   @EnableConfigurationProperties(CacheProperties.class)
   static class TestConfig {}

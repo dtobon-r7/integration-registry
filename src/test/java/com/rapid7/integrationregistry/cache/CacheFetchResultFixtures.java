@@ -12,7 +12,7 @@ final class CacheFetchResultFixtures {
 
   private CacheFetchResultFixtures() {}
 
-  static FetchResult iconResult(Instant fetchedAt) {
+  static FetchResult iconResult(String orgId, Instant fetchedAt) {
     NormalizedIntegration integration =
         new NormalizedIntegration(
             "conn-1",
@@ -23,7 +23,11 @@ final class CacheFetchResultFixtures {
             IntegrationStatus.HEALTHY,
             null,
             "https://icon.example/connections/conn-1",
-            "org-123");
+            orgId);
     return new FetchResult(List.of(integration), fetchedAt);
+  }
+
+  static FetchResult iconResult(Instant fetchedAt) {
+    return iconResult("org-123", fetchedAt);
   }
 }

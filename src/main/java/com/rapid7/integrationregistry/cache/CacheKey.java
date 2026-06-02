@@ -18,12 +18,14 @@ import java.util.Objects;
 final class CacheKey {
 
   private static final String PREFIX = "ir:cache:";
+  private static final String FIELD_TIER = "tier";
   private static final String FIELD_ORG_ID = "orgId";
   private static final String FIELD_PRODUCT_NAME = "productName";
 
   private CacheKey() {}
 
   static String of(CacheTier tier, String orgId, String productName) {
+    Objects.requireNonNull(tier, FIELD_TIER);
     Objects.requireNonNull(orgId, FIELD_ORG_ID);
     Objects.requireNonNull(productName, FIELD_PRODUCT_NAME);
 

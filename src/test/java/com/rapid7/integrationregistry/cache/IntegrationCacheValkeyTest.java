@@ -54,7 +54,8 @@ class IntegrationCacheValkeyTest extends ValkeyTestContainer {
   @Test
   void writeOnSuccess_shouldPopulateBothTiers_whenWritten() {
     // Arrange
-    FetchResult result = CacheFetchResultFixtures.iconResult(Instant.parse("2026-06-01T12:00:00Z"));
+    FetchResult result =
+        CacheFetchResultFixtures.iconResult(ORG, Instant.parse("2026-06-01T12:00:00Z"));
 
     // Act
     cache.writeOnSuccess(ORG, PRODUCT, result);
@@ -76,7 +77,8 @@ class IntegrationCacheValkeyTest extends ValkeyTestContainer {
   @Test
   void readStale_shouldStillReturnEntry_whenFreshKeyManuallyEvicted() {
     // Arrange
-    FetchResult result = CacheFetchResultFixtures.iconResult(Instant.parse("2026-06-01T12:00:00Z"));
+    FetchResult result =
+        CacheFetchResultFixtures.iconResult(ORG, Instant.parse("2026-06-01T12:00:00Z"));
     cache.writeOnSuccess(ORG, PRODUCT, result);
 
     // Act — simulate fresh-tier expiry by deleting only the fresh key; stale must survive
@@ -90,7 +92,8 @@ class IntegrationCacheValkeyTest extends ValkeyTestContainer {
   @Test
   void readStale_shouldBeUnchanged_whenNoSuccessfulFetchOccurs() {
     // Arrange — a good stale entry exists
-    FetchResult good = CacheFetchResultFixtures.iconResult(Instant.parse("2026-06-01T12:00:00Z"));
+    FetchResult good =
+        CacheFetchResultFixtures.iconResult(ORG, Instant.parse("2026-06-01T12:00:00Z"));
     cache.writeOnSuccess(ORG, PRODUCT, good);
     StaleEntry before = cache.readStale(ORG, PRODUCT).orElseThrow();
 
@@ -114,7 +117,7 @@ class IntegrationCacheValkeyTest extends ValkeyTestContainer {
   @Test
   void readFresh_shouldExpire_whenFreshTtlElapses() {
     // This test uses a short fresh-ttl set via @TestPropertySource
-    FetchResult result = CacheFetchResultFixtures.iconResult(Instant.now());
+    FetchResult result = CacheFetchResultFixtures.iconResult(ORG, Instant.now());
     cache.writeOnSuccess(ORG, "ExpiryProbe", result);
 
     // Assert — present now, gone after the (short) fresh TTL
