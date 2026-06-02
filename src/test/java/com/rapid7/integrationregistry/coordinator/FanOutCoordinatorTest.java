@@ -233,4 +233,24 @@ class FanOutCoordinatorTest {
             ProductOutcome.Served.class, served -> assertThat(served.stale()).isTrue());
     verify(cache, never()).writeOnSuccess(anyString(), anyString(), any());
   }
+
+  @Test
+  void fetchAll_shouldTimeOutSlowAdapter_whenPerAdapterTimeoutExceeded() {
+    // Arrange: a 500ms-slow adapter with a 100ms per-adapter timeout, no stale → timeout/omitted
+    var slow = CoordinatorAdapterFixtures.slow("InsightIDR", 500);
+    CoordinatorProperties tightProps =
+        new CoordinatorProperties(
+            Duration.ofSeconds(20),
+            Duration.ofMillis(100),
+            Map.of("InsightIDR", Duration.ofMillis(100)));
+    FanOutCoordinator coordinator = new FanOutCoordinator(Set.of(slow), cache, tightProps);
+
+    // Act
+    List<ProductOutcome> outcomes = coordinator.fetchAll(ORG, new HttpHeaders());
+
+    // Assert: surfaced as a timeout, not a hang
+    assertThat(outcomes.get(0))
+        .isInstanceOfSatisfying(
+            ProductOutcome.Unavailable.class, u -> assertThat(u.reason()).isEqualTo("timeout"));
+  }
 }
