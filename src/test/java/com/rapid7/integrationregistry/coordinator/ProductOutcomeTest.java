@@ -61,4 +61,30 @@ class ProductOutcomeTest {
     // Assert: the record's copy is unaffected
     assertThat(served.integrations()).isEmpty();
   }
+
+  @Test
+  void unavailable_shouldExposeReason_whenOmitted() {
+    // Arrange / Act
+    ProductOutcome.Unavailable unavailable =
+        new ProductOutcome.Unavailable("InsightIDR", "timeout", false);
+
+    // Assert
+    assertThat(unavailable.productName()).isEqualTo("InsightIDR");
+    assertThat(unavailable.reason()).isEqualTo("timeout");
+    assertThat(unavailable.stale()).isFalse();
+  }
+
+  @Test
+  void unavailable_shouldRejectTrueStale() {
+    // Act / Assert: Unavailable always means omitted — stale must be false
+    assertThatThrownBy(() -> new ProductOutcome.Unavailable("InsightIDR", "timeout", true))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void unavailable_shouldRejectBlankReason() {
+    // Act / Assert
+    assertThatThrownBy(() -> new ProductOutcome.Unavailable("InsightIDR", "  ", false))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
 }
