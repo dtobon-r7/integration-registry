@@ -253,4 +253,32 @@ class FanOutCoordinatorTest {
         .isInstanceOfSatisfying(
             ProductOutcome.Unavailable.class, u -> assertThat(u.reason()).isEqualTo("timeout"));
   }
+
+  @Test
+  void fetchAll_shouldPreserveFastAdapter_whenTotalDeadlineCutsOffSlowOne() {
+    // Arrange: total deadline 200ms. Fast adapter succeeds; slow adapter (800ms) is cut off.
+    // Generous per-adapter timeouts so the TOTAL deadline is the binding constraint.
+    var fast = CoordinatorAdapterFixtures.success("InsightConnect");
+    var slow = CoordinatorAdapterFixtures.slow("InsightIDR", 800);
+    CoordinatorProperties deadlineProps =
+        new CoordinatorProperties(Duration.ofMillis(200), Duration.ofSeconds(30), Map.of());
+    FanOutCoordinator coordinator =
+        new FanOutCoordinator(
+            new java.util.LinkedHashSet<>(java.util.List.of(fast, slow)), cache, deadlineProps);
+
+    // Act
+    List<ProductOutcome> outcomes = coordinator.fetchAll(ORG, new HttpHeaders());
+
+    // Assert: both products present; fast served, slow omitted as timeout
+    assertThat(outcomes).hasSize(2);
+    assertThat(outcomes)
+        .filteredOn(o -> o.productName().equals("InsightConnect"))
+        .first()
+        .isInstanceOf(ProductOutcome.Served.class);
+    assertThat(outcomes)
+        .filteredOn(o -> o.productName().equals("InsightIDR"))
+        .first()
+        .isInstanceOfSatisfying(
+            ProductOutcome.Unavailable.class, u -> assertThat(u.reason()).isEqualTo("timeout"));
+  }
 }
