@@ -62,6 +62,11 @@ public class FanOutCoordinator {
     List<Dispatch> dispatches = new ArrayList<>();
 
     // Phase 1: fresh-tier reads. A fresh hit is served directly — no adapter task submitted.
+    // try-with-resources closes the executor, which blocks until all submitted tasks terminate.
+    // On the timeout branch tasks are cancel(true)'d (interrupt). The total-deadline guarantee
+    // therefore assumes adapter tasks are interruptible — the real RestClient adapters use
+    // interruptible socket I/O (ADR-002), so an interrupt promptly unblocks them. A task that
+    // ignored interrupts could delay close() past the deadline.
     try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
       for (IntegrationAdapter adapter : adapters) {
         String product = adapter.productName();
@@ -93,7 +98,16 @@ public class FanOutCoordinator {
       return classifySuccess(product, orgId, result);
     } catch (TimeoutException e) {
       dispatch.future().cancel(true);
-      log.debug("Adapter {} exceeded its deadline; treating as timeout", product);
+      // Distinguish the binding budget: if the total-request deadline left less headroom than the
+      // per-adapter timeout, the deadline was exhausted; otherwise the adapter ran past its own
+      // per-adapter timeout. Both classify as a transient "timeout".
+      String boundBy =
+          untilDeadlineMs < perAdapterMs ? "total request deadline" : "per-adapter timeout";
+      log.debug(
+          "Adapter {} timed out after {}ms (bound by {}); treating as timeout",
+          product,
+          waitMs,
+          boundBy);
       return staleOrUnavailable(orgId, product, REASON_TIMEOUT);
     } catch (ExecutionException e) {
       return classifyFailure(orgId, product, e.getCause());
@@ -116,7 +130,14 @@ public class FanOutCoordinator {
 
   private ProductOutcome classifyFailure(String orgId, String product, Throwable cause) {
     if (cause instanceof AdapterException adapterException) {
-      return staleOrUnavailable(orgId, product, adapterException.reasonCode());
+      // Stale-tier fallback is scoped to transient failures (timeout, upstream_5xx) per ADR-001 and
+      // RFC-001 §Stale-tier fallback. A PERMANENT failure (auth_failure) must omit the product
+      // outright — never read or serve stale. reason is always sourced from reasonCode(), never
+      // re-derived from the exception class.
+      if (adapterException.isTransient()) {
+        return staleOrUnavailable(orgId, product, adapterException.reasonCode());
+      }
+      return new ProductOutcome.Unavailable(product, adapterException.reasonCode(), false);
     }
     // An unexpected (non-AdapterException) cause is an adapter-contract violation, not partial
     // unavailability — surface it so T09's @ControllerAdvice maps it to 500. Never silently

@@ -124,15 +124,18 @@ T09 derivations (not implemented here, documented for the contract):
 exceptions, or synthesized as `"timeout"` for a total-deadline / per-adapter-timeout cutoff.
 `no_data` is the only `reason` not originating from an exception.
 
-Stale-fallback eligibility: the coordinator reads the stale tier on every non-fresh, non-success
-terminal branch (timeout, upstream_5xx, auth_failure, and empty-success). `AdapterAuthException`
-is `isTransient()==false`; the work plan and RFC decision tree gate stale fallback on
-*adapter failure* generally (step 2: "reads the stale tier for (org_id, product_name)") rather
-than on transience. Decision: **serve stale on any failure when a usable stale entry exists**,
-including `auth_failure` — a recent good snapshot is more useful than omitting the product, and
-the `stale:true` flag is honest about freshness. `isTransient()` is retained on the exception
-contract for future policy but does not suppress stale fallback in MVP. (Recorded as an
-autonomous decision for Phase 7 review.)
+Stale-fallback eligibility is gated on `AdapterException.isTransient()` (ADR-001 line 46:
+"dispatch on `isTransient()` (stale-fallback eligibility)"). Transient failures
+(`AdapterTimeoutException`, `AdapterUpstreamException`, and the synthesized total-deadline
+timeout) read the stale tier and serve stale when a usable entry exists. A **permanent** failure
+(`AdapterAuthException`, `isTransient()==false`) does **not** serve stale data — its committed
+Javadoc says so explicitly, and RFC-001 §Stale-tier fallback step 1 scopes the fallback to
+"timeout or upstream error." An auth failure therefore always produces
+`Unavailable(reason="auth_failure")` regardless of stale-tier contents.
+
+Empty-but-successful fetch is not an exception path: it reads the stale tier and serves stale
+when present, else `Unavailable("no_data")` (work-plan literal). The empty success is never
+cached.
 
 ## Concurrency, timeouts & failure isolation
 

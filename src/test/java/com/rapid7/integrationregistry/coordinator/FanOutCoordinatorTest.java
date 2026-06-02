@@ -9,7 +9,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.rapid7.integrationregistry.adapter.FetchResult;
+import com.rapid7.integrationregistry.adapter.exception.AdapterAuthException;
 import com.rapid7.integrationregistry.cache.IntegrationCache;
+import com.rapid7.integrationregistry.cache.StaleEntry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -62,6 +64,33 @@ class FanOutCoordinatorTest {
               assertThat(served.cacheHitPerProduct()).isTrue();
               assertThat(served.stale()).isFalse();
               assertThat(served.fetchedAt()).isEqualTo(FETCHED_AT);
+            });
+  }
+
+  @Test
+  void fetchAll_shouldOmitNotServeStale_whenAuthFailsEvenWithStalePresent() {
+    // Arrange: a usable stale entry exists, but the adapter fails with a PERMANENT auth failure.
+    // Per ADR-001 / RFC-001, permanent failures (isTransient() == false) must NOT serve stale.
+    Instant staleSince = FETCHED_AT.minus(Duration.ofHours(1));
+    FetchResult staleResult = CoordinatorAdapterFixtures.sampleResult("InsightIDR", staleSince);
+    when(cache.readStale(ORG, "InsightIDR"))
+        .thenReturn(Optional.of(new StaleEntry(staleResult, staleSince)));
+    var adapter =
+        CoordinatorAdapterFixtures.throwing("InsightIDR", new AdapterAuthException("401"));
+    FanOutCoordinator coordinator = new FanOutCoordinator(Set.of(adapter), cache, props());
+
+    // Act
+    List<ProductOutcome> outcomes = coordinator.fetchAll(ORG, new HttpHeaders());
+
+    // Assert: omitted as Unavailable with reason auth_failure — stale tier is NOT served.
+    assertThat(outcomes).hasSize(1);
+    assertThat(outcomes.get(0))
+        .isInstanceOfSatisfying(
+            ProductOutcome.Unavailable.class,
+            unavailable -> {
+              assertThat(unavailable.productName()).isEqualTo("InsightIDR");
+              assertThat(unavailable.reason()).isEqualTo("auth_failure");
+              assertThat(unavailable.stale()).isFalse();
             });
   }
 }
