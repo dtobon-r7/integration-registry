@@ -281,4 +281,26 @@ class FanOutCoordinatorTest {
         .isInstanceOfSatisfying(
             ProductOutcome.Unavailable.class, u -> assertThat(u.reason()).isEqualTo("timeout"));
   }
+
+  @Test
+  void fetchAll_shouldDispatchAdaptersConcurrently_notSerially() {
+    // Arrange: two adapters each sleeping 300ms. Serial would be ~600ms; concurrent ~300ms.
+    var a = CoordinatorAdapterFixtures.slow("InsightConnect", 300);
+    var b = CoordinatorAdapterFixtures.slow("InsightIDR", 300);
+    // Per-adapter + total budgets comfortably above 300ms so neither times out.
+    CoordinatorProperties roomyProps =
+        new CoordinatorProperties(Duration.ofSeconds(5), Duration.ofSeconds(5), Map.of());
+    FanOutCoordinator coordinator =
+        new FanOutCoordinator(
+            new java.util.LinkedHashSet<>(java.util.List.of(a, b)), cache, roomyProps);
+
+    // Act
+    long start = System.nanoTime();
+    List<ProductOutcome> outcomes = coordinator.fetchAll(ORG, new HttpHeaders());
+    long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+
+    // Assert: both served, and wall-time is far closer to one sleep than two (proves concurrency).
+    assertThat(outcomes).hasSize(2).allMatch(o -> o instanceof ProductOutcome.Served);
+    assertThat(elapsedMs).isLessThan(550);
+  }
 }
