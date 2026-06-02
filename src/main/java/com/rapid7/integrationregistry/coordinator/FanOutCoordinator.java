@@ -34,6 +34,13 @@ import org.springframework.stereotype.Component;
  * <p>Adapters use blocking {@code RestClient} (ADR-002); a per-call virtual-thread executor makes
  * the dispatch truly concurrent. Requires {@code spring.threads.virtual.enabled=true}.
  */
+// CouplingBetweenObjects: the review must-fixes added two unavoidable JDK exception types —
+// IllegalStateException (null-FetchResult and duplicate-productName contract violations) and
+// IllegalArgumentException (orgId boundary guard) — pushing CBO from 15 to 17. Both are mandated
+// by the input-validation contract and cannot be folded away without re-introducing the very bug
+// they guard. Suppressed locally and justified rather than weakening the project-wide threshold,
+// mirroring the existing precedent on VendorAggregator.
+@SuppressWarnings("PMD.CouplingBetweenObjects")
 @Component
 public class FanOutCoordinator {
 
@@ -46,6 +53,7 @@ public class FanOutCoordinator {
 
   public FanOutCoordinator(
       Set<IntegrationAdapter> adapters, IntegrationCache cache, CoordinatorProperties properties) {
+    requireUniqueProductNames(adapters);
     this.adapters = adapters;
     this.cache = cache;
     this.properties = properties;
@@ -53,10 +61,35 @@ public class FanOutCoordinator {
   }
 
   /**
+   * Fail fast at startup if two registered adapters claim the same {@code productName()}:
+   * duplicates would otherwise produce duplicate {@link ProductOutcome}s and a same-key cache write
+   * race at request time.
+   */
+  private static void requireUniqueProductNames(Set<IntegrationAdapter> adapters) {
+    List<String> seen = new ArrayList<>();
+    List<String> duplicates = new ArrayList<>();
+    for (IntegrationAdapter adapter : adapters) {
+      String product = adapter.productName();
+      if (seen.contains(product)) {
+        duplicates.add(product);
+      } else {
+        seen.add(product);
+      }
+    }
+    if (!duplicates.isEmpty()) {
+      throw new IllegalStateException("Duplicate adapter productName(s) registered: " + duplicates);
+    }
+  }
+
+  /**
    * Fetch every registered product's integrations for {@code orgId}, in parallel. Returns one
    * {@link ProductOutcome} per adapter; never throws for a per-adapter failure.
    */
   public List<ProductOutcome> fetchAll(String orgId, HttpHeaders authHeaders) {
+    if (orgId == null || orgId.isBlank()) {
+      throw new IllegalArgumentException("orgId must not be null or blank");
+    }
+
     List<ProductOutcome> outcomes = new ArrayList<>();
     List<Dispatch> dispatches = new ArrayList<>();
 
@@ -79,9 +112,20 @@ public class FanOutCoordinator {
       }
 
       // Phase 2: await each dispatched adapter under per-adapter timeout AND total deadline.
+      // A non-AdapterException cause (or a null FetchResult) makes awaitAndClassify throw
+      // IllegalStateException — a contract violation that propagates to T09's 500. If it escapes
+      // mid-loop, the remaining, un-awaited futures would still be running and executor.close()
+      // would block on them past the deadline. The finally cancels every not-yet-done dispatch so
+      // close() only waits on cancelled/interruptible tasks and the original exception propagates.
       Instant deadline = Instant.now().plus(properties.totalDeadline());
-      for (Dispatch dispatch : dispatches) {
-        outcomes.add(awaitAndClassify(dispatch, orgId, deadline));
+      try {
+        for (Dispatch dispatch : dispatches) {
+          outcomes.add(awaitAndClassify(dispatch, orgId, deadline));
+        }
+      } finally {
+        for (Dispatch dispatch : dispatches) {
+          dispatch.future().cancel(true);
+        }
       }
     }
     return outcomes;
@@ -93,8 +137,14 @@ public class FanOutCoordinator {
     long untilDeadlineMs = Duration.between(Instant.now(), deadline).toMillis();
     long waitMs = Math.max(0, Math.min(perAdapterMs, untilDeadlineMs));
     try {
-      return classifier.classifySuccess(
-          orgId, product, dispatch.future().get(waitMs, TimeUnit.MILLISECONDS));
+      FetchResult result = dispatch.future().get(waitMs, TimeUnit.MILLISECONDS);
+      if (result == null) {
+        // A null return is an adapter-contract violation, not partial unavailability — surface it
+        // the same way as a non-AdapterException cause (Fix 1's cancellation path → T09's 500).
+        // Never silently coerced to Unavailable.
+        throw new IllegalStateException("Adapter " + product + " returned a null FetchResult");
+      }
+      return classifier.classifySuccess(orgId, product, result);
     } catch (TimeoutException e) {
       dispatch.future().cancel(true);
       // Distinguish the binding budget: if the total-request deadline left less headroom than the

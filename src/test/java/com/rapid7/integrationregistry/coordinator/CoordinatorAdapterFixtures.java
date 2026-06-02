@@ -58,6 +58,10 @@ final class CoordinatorAdapterFixtures {
     int callCount() {
       return calls.get();
     }
+
+    boolean wasInterrupted() {
+      return false;
+    }
   }
 
   /** Returns a non-empty result immediately. */
@@ -112,6 +116,57 @@ final class CoordinatorAdapterFixtures {
           throw new RuntimeException("interrupted", e);
         }
         return sampleResult(productName, FETCHED_AT);
+      }
+    };
+  }
+
+  /**
+   * Like {@link #slow}, but records whether its sleep was interrupted (i.e. the dispatch future was
+   * cancelled). Lets a test assert sibling cancellation deterministically.
+   */
+  static CountingAdapter recordingSlow(String productName, long sleepMillis) {
+    return new CountingAdapter(productName) {
+      private final java.util.concurrent.atomic.AtomicBoolean interrupted =
+          new java.util.concurrent.atomic.AtomicBoolean(false);
+
+      @Override
+      public FetchResult fetch(String orgId, HttpHeaders authHeaders) {
+        calls.incrementAndGet();
+        try {
+          Thread.sleep(sleepMillis);
+        } catch (InterruptedException e) {
+          interrupted.set(true);
+          Thread.currentThread().interrupt();
+          throw new RuntimeException("interrupted", e);
+        }
+        return sampleResult(productName, FETCHED_AT);
+      }
+
+      @Override
+      boolean wasInterrupted() {
+        return interrupted.get();
+      }
+    };
+  }
+
+  /** Returns {@code null} from fetch — an adapter-contract violation. */
+  static CountingAdapter nullReturning(String productName) {
+    return new CountingAdapter(productName) {
+      @Override
+      public FetchResult fetch(String orgId, HttpHeaders authHeaders) {
+        calls.incrementAndGet();
+        return null;
+      }
+    };
+  }
+
+  /** Throws a plain (non-{@link AdapterException}) {@link RuntimeException} — a contract breach. */
+  static CountingAdapter throwingRuntime(String productName, String message) {
+    return new CountingAdapter(productName) {
+      @Override
+      public FetchResult fetch(String orgId, HttpHeaders authHeaders) {
+        calls.incrementAndGet();
+        throw new RuntimeException(message);
       }
     };
   }

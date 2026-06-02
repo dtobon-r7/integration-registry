@@ -1,6 +1,7 @@
 package com.rapid7.integrationregistry.coordinator;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -302,5 +303,104 @@ class FanOutCoordinatorTest {
     // Assert: both served, and wall-time is far closer to one sleep than two (proves concurrency).
     assertThat(outcomes).hasSize(2).allMatch(o -> o instanceof ProductOutcome.Served);
     assertThat(elapsedMs).isLessThan(550);
+  }
+
+  @Test
+  void fetchAll_shouldCancelSiblings_whenAnAdapterThrowsUnexpectedly() {
+    // Arrange: one adapter throws a plain RuntimeException (non-AdapterException → contract
+    // violation), one adapter is slow (would sleep 5s). Generous budgets so neither times out.
+    var boom = CoordinatorAdapterFixtures.throwingRuntime("InsightConnect", "kaboom");
+    var slow = CoordinatorAdapterFixtures.recordingSlow("InsightIDR", 5_000);
+    CoordinatorProperties roomyProps =
+        new CoordinatorProperties(Duration.ofSeconds(30), Duration.ofSeconds(30), Map.of());
+    FanOutCoordinator coordinator =
+        new FanOutCoordinator(
+            new java.util.LinkedHashSet<>(java.util.List.of(boom, slow)), cache, roomyProps);
+
+    // Act + Assert: the contract violation propagates, and it does so well under the 5s sleep,
+    // proving the slow sibling was cancelled rather than awaited to completion.
+    long start = System.nanoTime();
+    assertThatThrownBy(() -> coordinator.fetchAll(ORG, new HttpHeaders()))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("InsightConnect");
+    long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+
+    assertThat(elapsedMs).isLessThan(2_000);
+    assertThat(slow.wasInterrupted()).isTrue();
+  }
+
+  @Test
+  void fetchAll_shouldThrow_whenAdapterReturnsNullFetchResult() {
+    // Arrange: adapter returns null from fetch() — an adapter-contract violation.
+    var adapter = CoordinatorAdapterFixtures.nullReturning("InsightConnect");
+    FanOutCoordinator coordinator = new FanOutCoordinator(Set.of(adapter), cache, props());
+
+    // Act + Assert: surfaced as IllegalStateException naming the product, routed to T09's 500.
+    assertThatThrownBy(() -> coordinator.fetchAll(ORG, new HttpHeaders()))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("InsightConnect")
+        .hasMessageContaining("null FetchResult");
+    verify(cache, never()).writeOnSuccess(anyString(), anyString(), any());
+  }
+
+  @Test
+  void constructor_shouldThrow_whenTwoAdaptersShareProductName() {
+    // Arrange: two distinct adapter instances claiming the same productName().
+    var first = CoordinatorAdapterFixtures.success("InsightConnect");
+    var second = CoordinatorAdapterFixtures.empty("InsightConnect");
+
+    // Act + Assert: fail fast at construction; the cache must not be touched.
+    assertThatThrownBy(
+            () ->
+                new FanOutCoordinator(
+                    new java.util.LinkedHashSet<>(java.util.List.of(first, second)),
+                    cache,
+                    props()))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("InsightConnect");
+  }
+
+  @Test
+  void fetchAll_shouldThrow_whenOrgIdBlank() {
+    // Arrange
+    var adapter = CoordinatorAdapterFixtures.success("InsightConnect");
+    FanOutCoordinator coordinator = new FanOutCoordinator(Set.of(adapter), cache, props());
+
+    // Act + Assert: a blank orgId fails clearly at the boundary, before any cache call.
+    assertThatThrownBy(() -> coordinator.fetchAll("   ", new HttpHeaders()))
+        .isInstanceOf(IllegalArgumentException.class);
+    verify(cache, never()).readFresh(anyString(), anyString());
+  }
+
+  @Test
+  void fetchAll_shouldIsolateTimeout_whenOneAdapterTimesOutAndOtherSucceeds() {
+    // Acceptance signal #1: one adapter times out, the other returns data; the request does not
+    // throw and both products are present with the expected outcomes.
+    var fast = CoordinatorAdapterFixtures.success("InsightConnect");
+    var slow = CoordinatorAdapterFixtures.slow("InsightIDR", 500);
+    CoordinatorProperties isoProps =
+        new CoordinatorProperties(
+            Duration.ofSeconds(30),
+            Duration.ofSeconds(30),
+            Map.of("InsightIDR", Duration.ofMillis(100)));
+    FanOutCoordinator coordinator =
+        new FanOutCoordinator(
+            new java.util.LinkedHashSet<>(java.util.List.of(fast, slow)), cache, isoProps);
+
+    // Act
+    List<ProductOutcome> outcomes = coordinator.fetchAll(ORG, new HttpHeaders());
+
+    // Assert: no throw; both products present; InsightConnect served, InsightIDR timeout.
+    assertThat(outcomes).hasSize(2);
+    assertThat(outcomes)
+        .filteredOn(o -> o.productName().equals("InsightConnect"))
+        .first()
+        .isInstanceOfSatisfying(
+            ProductOutcome.Served.class, s -> assertThat(s.integrations()).hasSize(1));
+    assertThat(outcomes)
+        .filteredOn(o -> o.productName().equals("InsightIDR"))
+        .first()
+        .isInstanceOfSatisfying(
+            ProductOutcome.Unavailable.class, u -> assertThat(u.reason()).isEqualTo("timeout"));
   }
 }

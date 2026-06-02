@@ -5,7 +5,6 @@ import com.rapid7.integrationregistry.adapter.exception.AdapterException;
 import com.rapid7.integrationregistry.cache.IntegrationCache;
 import com.rapid7.integrationregistry.cache.StaleEntry;
 import java.util.Optional;
-import org.springframework.stereotype.Component;
 
 /**
  * Classifies the terminal state of a single adapter dispatch into a {@link ProductOutcome}, owning
@@ -17,7 +16,6 @@ import org.springframework.stereotype.Component;
  * <p>Failure reasons are sourced from {@link AdapterException#reasonCode()} (ADR-001), never
  * re-derived here.
  */
-@Component
 class OutcomeClassifier {
 
   private static final String REASON_TIMEOUT = "timeout";
