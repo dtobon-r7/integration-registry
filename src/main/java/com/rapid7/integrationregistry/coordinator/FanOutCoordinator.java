@@ -6,6 +6,7 @@ import com.rapid7.integrationregistry.cache.IntegrationCache;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -66,16 +67,12 @@ public class FanOutCoordinator {
    * race at request time.
    */
   private static void requireUniqueProductNames(Set<IntegrationAdapter> adapters) {
-    List<String> seen = new ArrayList<>();
-    List<String> duplicates = new ArrayList<>();
-    for (IntegrationAdapter adapter : adapters) {
-      String product = adapter.productName();
-      if (seen.contains(product)) {
-        duplicates.add(product);
-      } else {
-        seen.add(product);
-      }
-    }
+    Set<String> seen = new HashSet<>();
+    List<String> duplicates =
+        adapters.stream()
+            .map(IntegrationAdapter::productName)
+            .filter(product -> !seen.add(product))
+            .toList();
     if (!duplicates.isEmpty()) {
       throw new IllegalStateException("Duplicate adapter productName(s) registered: " + duplicates);
     }
