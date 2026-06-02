@@ -170,4 +170,20 @@ class FanOutCoordinatorTest {
             ProductOutcome.Unavailable.class,
             u -> assertThat(u.reason()).isEqualTo("auth_failure"));
   }
+
+  @Test
+  void fetchAll_shouldReturnNoData_whenEmptySuccessAndNoStale() {
+    // Arrange: adapter returns empty, no stale entry
+    var adapter = CoordinatorAdapterFixtures.empty("InsightConnect");
+    FanOutCoordinator coordinator = new FanOutCoordinator(Set.of(adapter), cache, props());
+
+    // Act
+    List<ProductOutcome> outcomes = coordinator.fetchAll(ORG, new HttpHeaders());
+
+    // Assert: no_data, and the empty success is NOT written to cache
+    assertThat(outcomes.get(0))
+        .isInstanceOfSatisfying(
+            ProductOutcome.Unavailable.class, u -> assertThat(u.reason()).isEqualTo("no_data"));
+    verify(cache, never()).writeOnSuccess(anyString(), anyString(), any());
+  }
 }
