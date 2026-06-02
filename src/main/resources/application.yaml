@@ -1,6 +1,10 @@
 spring:
   application:
     name: integration-registry
+  threads:
+    virtual:
+      enabled: true   # ADR-002: blocking RestClient adapters are dispatched in parallel by the
+                      # FanOutCoordinator; virtual threads make those blocking calls truly concurrent.
   data:
     redis:
       host: ${REGISTRY_VALKEY_HOST:localhost}
@@ -27,6 +31,12 @@ integration-registry:
   cache:
     fresh-ttl: 5m
     stale-ttl: 24h
+  coordinator:
+    total-deadline: 20s
+    default-per-adapter-timeout: 10s
+    per-adapter-timeout:
+      InsightConnect: 5s
+      InsightIDR: 15s
   vendor-mapping:
     cache-dir: ${java.io.tmpdir}/integration-registry/vendor-mapping
     # bundle-version, s3-bucket, s3-key-prefix come from the deploy environment.
