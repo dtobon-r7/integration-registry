@@ -158,9 +158,14 @@ public class FanOutCoordinator {
     } catch (ExecutionException e) {
       return classifier.classifyFailure(orgId, product, e.getCause());
     } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
       dispatch.future().cancel(true);
-      return classifier.onTransientTimeout(orgId, product);
+      // Read the stale tier BEFORE restoring the interrupt flag: a blocking cache read on a thread
+      // whose interrupt status is already set can fail fast in some clients, needlessly turning a
+      // serviceable stale serve into an Unavailable. Restore the flag after, so the caller still
+      // observes the interruption.
+      ProductOutcome outcome = classifier.onTransientTimeout(orgId, product);
+      Thread.currentThread().interrupt();
+      return outcome;
     }
   }
 
