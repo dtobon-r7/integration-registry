@@ -37,22 +37,15 @@ class OutcomeClassifier {
         product, result.integrations(), result.fetchedAt(), false, false, Optional.empty());
   }
 
-  ProductOutcome classifyFailure(String orgId, String product, Throwable cause) {
-    if (cause instanceof AdapterException adapterException) {
-      // Stale-tier fallback is scoped to transient failures (timeout, upstream_5xx) per ADR-001 and
-      // RFC-001 §Stale-tier fallback. A PERMANENT failure (auth_failure) must omit the product
-      // outright — never read or serve stale. reason is always sourced from reasonCode(), never
-      // re-derived from the exception class.
-      if (adapterException.isTransient()) {
-        return staleOrUnavailable(orgId, product, adapterException.reasonCode());
-      }
-      return new ProductOutcome.Unavailable(product, adapterException.reasonCode(), false);
+  ProductOutcome classifyFailure(String orgId, String product, AdapterException failure) {
+    // Stale-tier fallback is scoped to transient failures (timeout, upstream_5xx) per ADR-001 and
+    // RFC-001 §Stale-tier fallback. A PERMANENT failure (auth_failure) must omit the product
+    // outright — never read or serve stale. reason is always sourced from reasonCode(), never
+    // re-derived from the exception class.
+    if (failure.isTransient()) {
+      return staleOrUnavailable(orgId, product, failure.reasonCode());
     }
-    // An unexpected (non-AdapterException) cause is an adapter-contract violation, not partial
-    // unavailability — surface it so T09's @ControllerAdvice maps it to 500. Never silently
-    // dropped.
-    throw new IllegalStateException(
-        "Adapter " + product + " failed with an unexpected exception", cause);
+    return new ProductOutcome.Unavailable(product, failure.reasonCode());
   }
 
   /** Terminal state for a timed-out or interrupted dispatch: transient, classified as timeout. */
@@ -78,6 +71,6 @@ class OutcomeClassifier {
           true,
           Optional.of(entry.staleSince()));
     }
-    return new ProductOutcome.Unavailable(product, reason, false);
+    return new ProductOutcome.Unavailable(product, reason);
   }
 }

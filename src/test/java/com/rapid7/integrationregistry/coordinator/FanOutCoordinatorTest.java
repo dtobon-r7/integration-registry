@@ -94,7 +94,6 @@ class FanOutCoordinatorTest {
             unavailable -> {
               assertThat(unavailable.productName()).isEqualTo("InsightIDR");
               assertThat(unavailable.reason()).isEqualTo("auth_failure");
-              assertThat(unavailable.stale()).isFalse();
             });
   }
 
@@ -285,10 +284,11 @@ class FanOutCoordinatorTest {
 
   @Test
   void fetchAll_shouldDispatchAdaptersConcurrently_notSerially() {
-    // Arrange: two adapters each sleeping 300ms. Serial would be ~600ms; concurrent ~300ms.
-    var a = CoordinatorAdapterFixtures.slow("InsightConnect", 300);
-    var b = CoordinatorAdapterFixtures.slow("InsightIDR", 300);
-    // Per-adapter + total budgets comfortably above 300ms so neither times out.
+    // Arrange: two adapters each sleeping 500ms. Serial would be ~1000ms; concurrent ~500ms. The
+    // generous gap between the two regimes keeps the concurrency signal under CI scheduling jitter.
+    var a = CoordinatorAdapterFixtures.slow("InsightConnect", 500);
+    var b = CoordinatorAdapterFixtures.slow("InsightIDR", 500);
+    // Per-adapter + total budgets comfortably above 500ms so neither times out.
     CoordinatorProperties roomyProps =
         new CoordinatorProperties(Duration.ofSeconds(5), Duration.ofSeconds(5), Map.of());
     FanOutCoordinator coordinator =
@@ -300,9 +300,10 @@ class FanOutCoordinatorTest {
     List<ProductOutcome> outcomes = coordinator.fetchAll(ORG, new HttpHeaders());
     long elapsedMs = (System.nanoTime() - start) / 1_000_000;
 
-    // Assert: both served, and wall-time is far closer to one sleep than two (proves concurrency).
+    // Assert: both served, and wall-time stays well below the ~1000ms serial runtime (proves
+    // concurrency) while leaving ample headroom over the ~500ms concurrent floor for CI jitter.
     assertThat(outcomes).hasSize(2).allMatch(o -> o instanceof ProductOutcome.Served);
-    assertThat(elapsedMs).isLessThan(550);
+    assertThat(elapsedMs).isLessThan(850);
   }
 
   @Test

@@ -53,24 +53,22 @@ public sealed interface ProductOutcome permits ProductOutcome.Served, ProductOut
 
   /**
    * A product omitted from the response: the adapter failed (timeout, upstream_5xx, auth_failure)
-   * or returned empty ({@code no_data}) and no usable stale entry existed. {@code stale} is always
-   * false here — when stale data IS available it is surfaced as a {@link Served} with {@code stale
-   * == true}, not here.
+   * or returned empty ({@code no_data}) and no usable stale entry existed. There is no stale flag
+   * here — a stale serve is, by definition, a {@link Served} with {@code stale == true}; {@code
+   * Unavailable} is always the genuine omission case, so T09 reads staleness off {@code Served}
+   * only.
    *
    * @param reason one of {@code timeout | upstream_5xx | auth_failure | no_data} (RFC-001
    *     §Supporting types); for adapter exceptions this is {@code AdapterException.reasonCode()},
    *     never re-derived at the catch site (ADR-001)
    */
-  record Unavailable(String productName, String reason, boolean stale) implements ProductOutcome {
+  record Unavailable(String productName, String reason) implements ProductOutcome {
 
     public Unavailable {
       Objects.requireNonNull(productName, "productName");
       Objects.requireNonNull(reason, "reason");
       if (reason.isBlank()) {
         throw new IllegalArgumentException("reason must not be blank");
-      }
-      if (stale) {
-        throw new IllegalArgumentException("Unavailable.stale must be false (omitted, not served)");
       }
     }
   }

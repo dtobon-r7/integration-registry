@@ -2,7 +2,7 @@
 
 **Work plan**: `engagements/unified-integrations-view/project/tracks/07-fan-out-and-cache/work-plans/02-fan-out-coordinator.md`
 **Date**: 2026-06-02
-**Status**: Approved (brainstorming)
+**Status**: Approved
 
 ---
 
@@ -29,8 +29,10 @@ This is the request-time orchestration seam between the adapters (T05/T06) and t
 - RFC-001 §Request lifecycle — cache-hit / cache-miss / adapter-unavailable branches.
 - ADR-001 — the `AdapterException` family parent; dispatch on `reasonCode()` / `isTransient()`,
   never re-derive `reason` at the catch site.
-- ADR-002 — adapters are blocking `RestClient`; parallel dispatch requires
-  `spring.threads.virtual.enabled=true` (hard setup step for this plan).
+- ADR-002 — adapters are blocking `RestClient`. The coordinator creates its own per-call
+  virtual-thread executor (`Executors.newVirtualThreadPerTaskExecutor()`), so fan-out parallelism
+  does not depend on `spring.threads.virtual.enabled=true`; that property is recommended for the
+  surrounding request-handling threads, not a hard requirement for this coordinator.
 - Plan 01 cache (`IntegrationCache`): `readFresh` → `Optional<FetchResult>`, `readStale` →
   `Optional<StaleEntry>` (carries `result` + `staleSince`), `writeOnSuccess`. Reads are total
   (Valkey outage = empty, never throws); writes swallow failures.
