@@ -34,6 +34,7 @@ class DataSourceSerializationTest {
     assertThat(json).doesNotContain("data_source_id");
     assertThat(json).doesNotContain("source_type");
     assertThat(json).doesNotContain("source_value");
+    assertThat(json).doesNotContain("source_identifier");
     assertThat(json).doesNotContain("customer_account_id");
     assertThat(OpenApiSchemas.validate("Integration", mapper.readTree(json))).isEmpty();
   }
@@ -70,6 +71,36 @@ class DataSourceSerializationTest {
     assertThat(json).contains("\"integrations_count\":1");
     assertThat(json).contains("\"integrations\":[");
     assertThat(OpenApiSchemas.validate("DataSource", mapper.readTree(json))).isEmpty();
+  }
+
+  @Test
+  void dataSource_shouldFailSchema_whenIntegrationTypeNotInEnum() throws Exception {
+    var dto =
+        new DataSourceDto(
+            "insightidr|product_type|microsoft-defender-endpoint",
+            "Microsoft Defender for Endpoint",
+            "Not A Real Type",
+            "InsightIDR",
+            HealthState.HEALTHY,
+            1,
+            List.of(healthyInstance()));
+    var json = dataSource.write(dto).getJson();
+    assertThat(OpenApiSchemas.validate("DataSource", mapper.readTree(json))).isNotEmpty();
+  }
+
+  @Test
+  void dataSource_shouldFailSchema_whenProductNameNotInEnum() throws Exception {
+    var dto =
+        new DataSourceDto(
+            "insightidr|product_type|microsoft-defender-endpoint",
+            "Microsoft Defender for Endpoint",
+            "SIEM Event Source",
+            "BogusProduct",
+            HealthState.HEALTHY,
+            1,
+            List.of(healthyInstance()));
+    var json = dataSource.write(dto).getJson();
+    assertThat(OpenApiSchemas.validate("DataSource", mapper.readTree(json))).isNotEmpty();
   }
 
   @Test

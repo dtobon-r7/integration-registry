@@ -8,8 +8,11 @@ import tools.jackson.databind.annotation.JsonNaming;
 
 /**
  * Wire body for {@code GET /vendors/{vendor_id}} per openapi.json VendorDetailResponse. Vendor
- * header (with rolled-up {@code aggregateHealth} + nullable {@code lastUpdated}) plus nested {@code
- * vendorServices[]} of VendorServiceCardNestedDto.
+ * header (with rolled-up {@code aggregateHealth}) plus nested {@code vendorServices[]} of
+ * VendorServiceCardNestedDto. {@code lastUpdated} is required (non-null) per the openapi.json
+ * contract; the aggregator projection records may carry a null internally, so assembly (Plan 02)
+ * must supply a non-null value (e.g. falling back to the response's {@code as_of}) before
+ * constructing this DTO.
  */
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record VendorDetailResponse(
@@ -27,11 +30,13 @@ public record VendorDetailResponse(
   static final String FIELD_VENDOR_SERVICES = "vendorServices";
   static final String FIELD_UNAVAILABLE_PRODUCTS = "unavailableProducts";
   static final String FIELD_METADATA = "metadata";
+  static final String FIELD_LAST_UPDATED = "lastUpdated";
 
   public VendorDetailResponse {
     Objects.requireNonNull(vendorId, FIELD_VENDOR_ID);
     Objects.requireNonNull(vendorName, FIELD_VENDOR_NAME);
     Objects.requireNonNull(aggregateHealth, FIELD_AGGREGATE_HEALTH);
+    Objects.requireNonNull(lastUpdated, FIELD_LAST_UPDATED);
     Objects.requireNonNull(vendorServices, FIELD_VENDOR_SERVICES);
     Objects.requireNonNull(unavailableProducts, FIELD_UNAVAILABLE_PRODUCTS);
     Objects.requireNonNull(metadata, FIELD_METADATA);

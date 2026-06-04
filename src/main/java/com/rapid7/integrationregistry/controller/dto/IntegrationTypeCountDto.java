@@ -5,8 +5,10 @@ import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.annotation.JsonNaming;
 
 /**
- * Wire per-type counts per openapi.json IntegrationTypeCount. {@code integrationType} is a plain
- * String (bundle/value-driven; see spec).
+ * Wire per-type counts per openapi.json IntegrationTypeCount. {@code integrationType} is a String
+ * at the Java level to sidestep a known value-set mismatch (resolution owned by T04/T08), but the
+ * wire contract constrains it to the openapi.json IntegrationType enum values — assembly (Plan 02)
+ * must supply contract-valid values.
  */
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record IntegrationTypeCountDto(String integrationType, int total, int errorCount) {

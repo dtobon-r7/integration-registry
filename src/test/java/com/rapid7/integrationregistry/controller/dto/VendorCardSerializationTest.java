@@ -1,6 +1,7 @@
 package com.rapid7.integrationregistry.controller.dto;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
@@ -67,20 +68,21 @@ class VendorCardSerializationTest {
   }
 
   @Test
-  void flatCard_shouldRenderNullLastUpdatedAsExplicitNull() throws Exception {
-    var dto =
-        new VendorServiceCardDto(
-            "jira",
-            "Jira",
-            "atlassian",
-            "Atlassian",
-            "itsm",
-            0,
-            List.of(),
-            List.of(),
-            HealthState.HEALTHY,
-            null);
-    var json = flat.write(dto).getJson();
-    assertThat(json).contains("\"last_updated\":null");
+  void flatCard_shouldRequireNonNullLastUpdated() {
+    assertThatNullPointerException()
+        .isThrownBy(
+            () ->
+                new VendorServiceCardDto(
+                    "jira",
+                    "Jira",
+                    "atlassian",
+                    "Atlassian",
+                    "itsm",
+                    0,
+                    List.of(),
+                    List.of(),
+                    HealthState.HEALTHY,
+                    null))
+        .withMessage(VendorServiceCardDto.FIELD_LAST_UPDATED);
   }
 }

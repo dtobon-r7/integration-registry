@@ -7,8 +7,10 @@ import tools.jackson.databind.annotation.JsonNaming;
 
 /**
  * Wire data-source block per openapi.json DataSource. {@code integrationType} and {@code
- * productName} are plain String (bundle/value-driven). Enforces {@code integrationsCount ==
- * integrations.size()}.
+ * productName} are String at the Java level to sidestep a known value-set mismatch (resolution
+ * owned by T04/T08), but the wire contract constrains them to the openapi.json IntegrationType /
+ * ProductName enum values — assembly (Plan 02) must supply contract-valid values. Enforces {@code
+ * integrationsCount == integrations.size()}.
  */
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record DataSourceDto(
