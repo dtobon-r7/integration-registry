@@ -1,0 +1,666 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Integration Registry — Read API",
+    "version": "1.0.0",
+    "description": "Read-only endpoints exposed by the Integration Registry service. The Registry aggregates integration metadata across Rapid7 products into a vendor-centric model: Vendor → Vendor Service → Data Source → Integration. All routes are mounted behind Command Platform Kong, which injects identity headers from the edge JWT.\n\nThis spec is the authoritative contract for the Registry's external read API. The accompanying RFC (RFC-001) carries the design rationale, entity field reference, and per-adapter contracts."
+  },
+  "servers": [
+    {
+      "url": "/integration-registry/v1",
+      "description": "Mounted behind Command Platform Kong. The v1 segment is the public-API version; breaking changes increment it."
+    }
+  ],
+  "tags": [
+    {"name": "vendor-services", "description": "Vendor-service grid feeds — the primary UI surface."},
+    {"name": "vendors", "description": "Vendor-scoped views and filter feeds."}
+  ],
+  "security": [
+    {"IpimsOrgId": [], "IpimsUserId": []}
+  ],
+  "paths": {
+    "/vendor-services": {
+      "get": {
+        "operationId": "listVendorServices",
+        "summary": "List all vendor services for the requesting org",
+        "description": "Primary grid feed. Returns one row per vendor service across all vendors that have at least one integration in the requesting org. No query parameters — filtering and search are client-side in MVP.",
+        "tags": ["vendor-services"],
+        "responses": {
+          "200": {
+            "description": "OK. An empty `vendor_services` array combined with a populated `unavailable_products` means the Registry could not reach any product right now — it is not equivalent to 'this org has no integrations'.",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/VendorServicesResponse"},
+                "example": {
+                  "vendor_services": [
+                    {
+                      "vendor_service_id": "microsoft-defender",
+                      "vendor_service_name": "Microsoft Defender",
+                      "vendor_id": "microsoft",
+                      "vendor_name": "Microsoft",
+                      "vendor_category": "edr",
+                      "integrations_connected": 6,
+                      "integration_type_counts": [
+                        {"integration_type": "SIEM Event Source", "total": 4, "error_count": 1},
+                        {"integration_type": "ASM Connector", "total": 1, "error_count": 0},
+                        {"integration_type": "Automation Plugin", "total": 1, "error_count": 0}
+                      ],
+                      "products_connected": ["InsightIDR", "InsightConnect", "Surface Command"],
+                      "aggregate_health": "error",
+                      "last_updated": "2026-04-22T14:30:00Z"
+                    },
+                    {
+                      "vendor_service_id": "jira",
+                      "vendor_service_name": "Jira",
+                      "vendor_id": "atlassian",
+                      "vendor_name": "Atlassian",
+                      "vendor_category": "itsm",
+                      "integrations_connected": 1,
+                      "integration_type_counts": [
+                        {"integration_type": "Automation Plugin", "total": 1, "error_count": 0}
+                      ],
+                      "products_connected": ["InsightConnect"],
+                      "aggregate_health": "healthy",
+                      "last_updated": "2026-04-23T09:00:00Z"
+                    }
+                  ],
+                  "unavailable_products": [],
+                  "metadata": {
+                    "cache_hit": true,
+                    "as_of": "2026-04-23T10:00:00Z",
+                    "mapping_version": "v1.42.0"
+                  }
+                }
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthenticated"},
+          "500": {"$ref": "#/components/responses/Internal"}
+        }
+      }
+    },
+    "/vendor-services/{vendor_service_id}": {
+      "get": {
+        "operationId": "getVendorServiceDetail",
+        "summary": "Expanded row for one vendor service",
+        "description": "Returns the data sources under a single vendor service, each grouping its integration instances. This is the payload behind expanding a row in the grid.",
+        "tags": ["vendor-services"],
+        "parameters": [
+{"$ref": "#/components/parameters/VendorServiceIdPath"}
+        ],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/VendorServiceDetailResponse"},
+                "example": {
+                  "vendor_service_id": "microsoft-defender",
+                  "vendor_service_name": "Microsoft Defender",
+                  "vendor_id": "microsoft",
+                  "vendor_name": "Microsoft",
+                  "vendor_category": "edr",
+                  "aggregate_health": "error",
+                  "last_updated": "2026-04-22T14:30:00Z",
+                  "data_sources": [
+                    {
+                      "data_source_id": "insightidr|product_type|microsoft-defender-endpoint",
+                      "display_name": "Microsoft Defender for Endpoint",
+                      "integration_type": "SIEM Event Source",
+                      "product_name": "InsightIDR",
+                      "status": "error",
+                      "integrations_count": 4,
+                      "integrations": [
+                        {
+                          "integration_id": "es_1234",
+                          "integration_label": "DC1-Defender-Endpoint",
+                          "status": "error",
+                          "last_success_timestamp": "2026-04-23T09:00:00Z",
+                          "configuration_url": "https://.../insightidr/eventsources/es_1234"
+                        }
+                      ]
+                    },
+                    {
+                      "data_source_id": "insightconnect|plugin_name|microsoft-defender",
+                      "display_name": "Microsoft Defender",
+                      "integration_type": "Automation Plugin",
+                      "product_name": "InsightConnect",
+                      "status": "healthy",
+                      "integrations_count": 1,
+                      "integrations": [
+                        {
+                          "integration_id": "c_456",
+                          "integration_label": null,
+                          "status": "healthy",
+                          "last_success_timestamp": "2026-04-23T09:30:00Z",
+                          "configuration_url": "https://.../automation/connections/c_456"
+                        }
+                      ]
+                    }
+                  ],
+                  "unavailable_products": [],
+                  "metadata": {
+                    "cache_hit": true,
+                    "as_of": "2026-04-23T10:00:00Z",
+                    "mapping_version": "v1.42.0"
+                  }
+                }
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthenticated"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "500": {"$ref": "#/components/responses/Internal"}
+        }
+      }
+    },
+    "/vendors": {
+      "get": {
+        "operationId": "listVendors",
+        "summary": "Lightweight vendor list for the filter dropdown",
+        "description": "Returns the list of vendors with at least one integration in the requesting org — enough for the UI's vendor filter without hauling the full grid payload.",
+        "tags": ["vendors"],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/VendorsResponse"},
+                "example": {
+                  "vendors": [
+                    {"vendor_id": "microsoft", "vendor_name": "Microsoft", "vendor_services_count": 2},
+                    {"vendor_id": "atlassian", "vendor_name": "Atlassian", "vendor_services_count": 1}
+                  ],
+                  "unavailable_products": [],
+                  "metadata": {
+                    "cache_hit": true,
+                    "as_of": "2026-04-23T10:00:00Z",
+                    "mapping_version": "v1.42.0"
+                  }
+                }
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthenticated"},
+          "500": {"$ref": "#/components/responses/Internal"}
+        }
+      }
+    },
+    "/vendors/{vendor_id}": {
+      "get": {
+        "operationId": "getVendorDetail",
+        "summary": "Vendor-scoped view",
+        "description": "Vendor metadata plus the vendor services for that vendor — what the UI renders when the user filters the grid by vendor. Each embedded vendor-service entry omits the redundant vendor fields present in the flat `/vendor-services` feed.",
+        "tags": ["vendors"],
+        "parameters": [
+{"$ref": "#/components/parameters/VendorIdPath"}
+        ],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/VendorDetailResponse"},
+                "example": {
+                  "vendor_id": "microsoft",
+                  "vendor_name": "Microsoft",
+                  "aggregate_health": "error",
+                  "last_updated": "2026-04-22T14:30:00Z",
+                  "vendor_services": [
+                    {
+                      "vendor_service_id": "microsoft-defender",
+                      "vendor_service_name": "Microsoft Defender",
+                      "vendor_category": "edr",
+                      "integrations_connected": 6,
+                      "integration_type_counts": [
+                        {"integration_type": "SIEM Event Source", "total": 4, "error_count": 1},
+                        {"integration_type": "ASM Connector", "total": 1, "error_count": 0},
+                        {"integration_type": "Automation Plugin", "total": 1, "error_count": 0}
+                      ],
+                      "products_connected": ["InsightIDR", "InsightConnect", "Surface Command"],
+                      "aggregate_health": "error",
+                      "last_updated": "2026-04-22T14:30:00Z"
+                    }
+                  ],
+                  "unavailable_products": [],
+                  "metadata": {
+                    "cache_hit": true,
+                    "as_of": "2026-04-23T10:00:00Z",
+                    "mapping_version": "v1.42.0"
+                  }
+                }
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthenticated"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "500": {"$ref": "#/components/responses/Internal"}
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "IpimsOrgId": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-IPIMS-ORG-ID",
+        "description": "Org identifier injected by Kong from the edge JWT. Absence yields 401."
+      },
+      "IpimsUserId": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-IPIMS-USER-ID",
+        "description": "User identifier injected by Kong from the edge JWT. Absence yields 401."
+      }
+    },
+    "parameters": {
+      "VendorIdPath": {
+        "name": "vendor_id",
+        "in": "path",
+        "required": true,
+        "description": "Stable URL-safe vendor slug.",
+        "schema": {"$ref": "#/components/schemas/Slug"}
+      },
+      "VendorServiceIdPath": {
+        "name": "vendor_service_id",
+        "in": "path",
+        "required": true,
+        "description": "Stable URL-safe vendor-service slug. Globally unique across the bundle tree.",
+        "schema": {"$ref": "#/components/schemas/Slug"}
+      }
+    },
+    "responses": {
+      "Unauthenticated": {
+        "description": "Inbound JWT fails validation (signature, expiry, or required claims) OR X-IPIMS-ORG-ID / X-IPIMS-USER-ID absent. The message is intentionally generic so the response does not leak which check failed.",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/ErrorEnvelope"},
+            "example": {"error": {"code": "UNAUTHENTICATED", "message": "Missing or invalid identity"}}
+          }
+        }
+      },
+      "NotFound": {
+        "description": "The requested vendor or vendor service has no integrations in the requesting org. Returned only when fresh AND stale data both confirm emptiness — when the only contributing product is unavailable and no stale entry exists, the route returns 200 with an empty payload and a populated unavailable_products[] instead, preserving the 'partial unavailability is always 200' invariant.",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/ErrorEnvelope"},
+            "example": {"error": {"code": "NOT_FOUND", "message": "Vendor service not found in this org"}}
+          }
+        }
+      },
+      "Internal": {
+        "description": "Unexpected Registry-internal error. Partial product unavailability is never surfaced as 500 — it goes into `unavailable_products` on a 200.",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/ErrorEnvelope"},
+            "example": {"error": {"code": "INTERNAL", "message": "Internal error"}}
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Slug": {
+        "type": "string",
+        "pattern": "^[a-z0-9_-]+$",
+        "description": "Stable URL-safe identifier. Immutable once shipped.",
+        "example": "microsoft-defender"
+      },
+      "Iso8601": {
+        "type": "string",
+        "format": "date-time",
+        "example": "2026-04-22T14:30:00Z"
+      },
+      "HealthState": {
+        "type": "string",
+        "enum": ["healthy", "warning", "error", "missing_data", "disabled"],
+        "description": "Status precedence (worst-first): error > missing_data > warning > disabled > healthy. Applies at the instance, data-source, vendor-service, and vendor levels via worst-state-wins rollup."
+      },
+      "VendorCategory": {
+        "type": "string",
+        "enum": ["edr", "siem", "itsm", "uem", "cloud", "productivity", "other"],
+        "description": "Vendor-service-level classification. A vendor service has exactly one category; the vendor that owns it may span many. Unknown vendor services fall back to 'other'."
+      },
+      "IntegrationType": {
+        "type": "string",
+        "enum": [
+          "SIEM Event Source",
+          "Automation Plugin",
+          "ASM Connector",
+          "Cloud Account",
+          "ICS Integration",
+          "AppSec Integration"
+        ],
+        "description": "Product-native type label. One value per data source — each adapter hardcodes a single value."
+      },
+      "ProductName": {
+        "type": "string",
+        "enum": [
+          "InsightIDR",
+          "InsightConnect",
+          "Surface Command",
+          "InsightVM",
+          "InsightCloudSec",
+          "InsightAppSec"
+        ],
+        "description": "Canonical productName() value. Matches IntegrationAdapter.productName() in the service code."
+      },
+      "UnavailableReason": {
+        "type": "string",
+        "enum": ["timeout", "upstream_5xx", "auth_failure", "no_data"],
+        "description": "Why a product is unavailable on this response. `timeout`: AdapterTimeoutException — adapter exceeded its per-adapter timeout. `upstream_5xx`: AdapterUpstreamException with a 5xx response from the product. `auth_failure`: AdapterAuthException — 4xx auth failure on the outbound Class 3 call. `no_data`: adapter returned successfully but with an empty result AND no stale entry exists — surfaced when the Registry needs to distinguish 'product is up but reported nothing' from a missed call."
+      },
+      "ErrorCode": {
+        "type": "string",
+        "enum": ["UNAUTHENTICATED", "NOT_FOUND", "INTERNAL"]
+      },
+      "IntegrationTypeCount": {
+        "type": "object",
+        "required": ["integration_type", "total", "error_count"],
+        "properties": {
+          "integration_type": {"$ref": "#/components/schemas/IntegrationType"},
+          "total": {"type": "integer", "minimum": 0},
+          "error_count": {"type": "integer", "minimum": 0}
+        },
+        "description": "Per-integration-type counts under a vendor service. Powers the badge chips with error indicators in the grid."
+      },
+      "UnavailableProduct": {
+        "type": "object",
+        "required": ["product_name", "stale", "reason"],
+        "properties": {
+          "product_name": {"$ref": "#/components/schemas/ProductName"},
+          "stale": {
+            "type": "boolean",
+            "description": "true when the response includes stale-tier data for this product; false when the product is omitted entirely."
+          },
+          "reason": {"$ref": "#/components/schemas/UnavailableReason"},
+          "stale_since": {
+            "allOf": [{"$ref": "#/components/schemas/Iso8601"}],
+            "description": "The fetched_at of the stale-tier entry being served. Present only when stale=true."
+          }
+        }
+      },
+      "ResponseMetadata": {
+        "type": "object",
+        "required": ["cache_hit", "as_of", "mapping_version"],
+        "properties": {
+          "cache_hit": {
+            "type": "boolean",
+            "description": "true only when every contributing adapter served from the fresh tier. Debug aid."
+          },
+          "as_of": {
+            "allOf": [{"$ref": "#/components/schemas/Iso8601"}],
+            "description": "Oldest fetched_at across contributing products — the honest freshness floor for the composite view."
+          },
+          "mapping_version": {
+            "type": "string",
+            "description": "Semver of the vendor mapping bundle loaded by the responding replica. Per-replica during a rolling deploy.",
+            "example": "v1.42.0"
+          }
+        }
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": ["code", "message"],
+            "properties": {
+              "code": {"$ref": "#/components/schemas/ErrorCode"},
+              "message": {"type": "string"}
+            }
+          }
+        }
+      },
+      "VendorListEntry": {
+        "type": "object",
+        "required": ["vendor_id", "vendor_name", "vendor_services_count"],
+        "properties": {
+          "vendor_id": {"$ref": "#/components/schemas/Slug"},
+          "vendor_name": {"type": "string"},
+          "vendor_services_count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Count of vendor services for this vendor that have at least one integration in the requesting org."
+          }
+        }
+      },
+      "VendorServiceCard": {
+        "type": "object",
+        "description": "Flat-feed vendor-service card. Embeds vendor_id and vendor_name so the UI can render the vendor filter chip without a separate lookup.",
+        "required": [
+          "vendor_service_id",
+          "vendor_service_name",
+          "vendor_id",
+          "vendor_name",
+          "vendor_category",
+          "integrations_connected",
+          "integration_type_counts",
+          "products_connected",
+          "aggregate_health",
+          "last_updated"
+        ],
+        "properties": {
+          "vendor_service_id": {"$ref": "#/components/schemas/Slug"},
+          "vendor_service_name": {"type": "string"},
+          "vendor_id": {"$ref": "#/components/schemas/Slug"},
+          "vendor_name": {"type": "string"},
+          "vendor_category": {"$ref": "#/components/schemas/VendorCategory"},
+          "integrations_connected": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Sum of integration_type_counts[].total."
+          },
+          "integration_type_counts": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/IntegrationTypeCount"}
+          },
+          "products_connected": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/ProductName"},
+            "description": "Distinct Rapid7 products contributing instances to this vendor service."
+          },
+          "aggregate_health": {"$ref": "#/components/schemas/HealthState"},
+          "last_updated": {"$ref": "#/components/schemas/Iso8601"}
+        }
+      },
+      "VendorServiceCardNested": {
+        "type": "object",
+        "description": "Vendor-scoped vendor-service card. Omits the redundant vendor_id/vendor_name fields present in the flat feed.",
+        "required": [
+          "vendor_service_id",
+          "vendor_service_name",
+          "vendor_category",
+          "integrations_connected",
+          "integration_type_counts",
+          "products_connected",
+          "aggregate_health",
+          "last_updated"
+        ],
+        "properties": {
+          "vendor_service_id": {"$ref": "#/components/schemas/Slug"},
+          "vendor_service_name": {"type": "string"},
+          "vendor_category": {"$ref": "#/components/schemas/VendorCategory"},
+          "integrations_connected": {"type": "integer", "minimum": 0},
+          "integration_type_counts": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/IntegrationTypeCount"}
+          },
+          "products_connected": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/ProductName"}
+          },
+          "aggregate_health": {"$ref": "#/components/schemas/HealthState"},
+          "last_updated": {"$ref": "#/components/schemas/Iso8601"}
+        }
+      },
+      "Integration": {
+        "type": "object",
+        "description": "A single configured instance of a data source in the requesting org.",
+        "required": ["integration_id", "integration_label", "status", "last_success_timestamp", "configuration_url"],
+        "properties": {
+          "integration_id": {
+            "type": "string",
+            "description": "Product-native identifier for the instance.",
+            "example": "es_1234"
+          },
+          "integration_label": {
+            "type": ["string", "null"],
+            "description": "Customer-given per-instance name as exposed by the source product. null when the product exposes no per-instance name (e.g. InsightConnect connections)."
+          },
+          "status": {"$ref": "#/components/schemas/HealthState"},
+          "last_success_timestamp": {
+            "oneOf": [
+              {"$ref": "#/components/schemas/Iso8601"},
+              {"type": "null"}
+            ],
+            "description": "ISO 8601 timestamp of the most recent successful activity. null when no successful activity has ever been recorded."
+          },
+          "configuration_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Deep-link to the owning product's configuration page for this instance."
+          }
+        }
+      },
+      "DataSource": {
+        "type": "object",
+        "description": "A named source under a vendor service — one bundle entry per (product_name, source_type, source_value) triplet. Groups integration instances of that source within the requesting org.",
+        "required": [
+          "data_source_id",
+          "display_name",
+          "integration_type",
+          "product_name",
+          "status",
+          "integrations_count",
+          "integrations"
+        ],
+        "properties": {
+          "data_source_id": {
+            "type": "string",
+            "description": "Stable composite identifier formed by joining lower(product_name).replace(' ', '-'), source_type, and source_value with '|' (e.g. 'surface-command|integration_id|com.rapid7.microsoft-defender-for-endpoint'). Opaque to clients; used only for diffing across responses. Bundle CI rejects source_value containing '|' to keep the composite unambiguous.",
+            "example": "insightidr|product_type|microsoft-defender-endpoint"
+          },
+          "display_name": {
+            "type": "string",
+            "description": "Sub-product label shown in the expanded row. Sourced from spec.vendors[].services[].data_sources[].display_name in the bundle.",
+            "example": "Microsoft Defender for Endpoint"
+          },
+          "integration_type": {"$ref": "#/components/schemas/IntegrationType"},
+          "product_name": {"$ref": "#/components/schemas/ProductName"},
+          "status": {
+            "allOf": [{"$ref": "#/components/schemas/HealthState"}],
+            "description": "Worst-state rollup across the instances under this data source."
+          },
+          "integrations_count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of configured instances of this data source in the requesting org. Equal to integrations.length."
+          },
+          "integrations": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/Integration"}
+          }
+        }
+      },
+      "VendorServicesResponse": {
+        "type": "object",
+        "required": ["vendor_services", "unavailable_products", "metadata"],
+        "properties": {
+          "vendor_services": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/VendorServiceCard"}
+          },
+          "unavailable_products": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/UnavailableProduct"}
+          },
+          "metadata": {"$ref": "#/components/schemas/ResponseMetadata"}
+        }
+      },
+      "VendorsResponse": {
+        "type": "object",
+        "required": ["vendors", "unavailable_products", "metadata"],
+        "properties": {
+          "vendors": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/VendorListEntry"}
+          },
+          "unavailable_products": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/UnavailableProduct"}
+          },
+          "metadata": {"$ref": "#/components/schemas/ResponseMetadata"}
+        }
+      },
+      "VendorDetailResponse": {
+        "type": "object",
+        "required": [
+          "vendor_id",
+          "vendor_name",
+          "aggregate_health",
+          "last_updated",
+          "vendor_services",
+          "unavailable_products",
+          "metadata"
+        ],
+        "properties": {
+          "vendor_id": {"$ref": "#/components/schemas/Slug"},
+          "vendor_name": {"type": "string"},
+          "aggregate_health": {
+            "allOf": [{"$ref": "#/components/schemas/HealthState"}],
+            "description": "Worst-state rollup across this vendor's vendor services."
+          },
+          "last_updated": {"$ref": "#/components/schemas/Iso8601"},
+          "vendor_services": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/VendorServiceCardNested"}
+          },
+          "unavailable_products": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/UnavailableProduct"}
+          },
+          "metadata": {"$ref": "#/components/schemas/ResponseMetadata"}
+        }
+      },
+      "VendorServiceDetailResponse": {
+        "type": "object",
+        "required": [
+          "vendor_service_id",
+          "vendor_service_name",
+          "vendor_id",
+          "vendor_name",
+          "vendor_category",
+          "aggregate_health",
+          "last_updated",
+          "data_sources",
+          "unavailable_products",
+          "metadata"
+        ],
+        "properties": {
+          "vendor_service_id": {"$ref": "#/components/schemas/Slug"},
+          "vendor_service_name": {"type": "string"},
+          "vendor_id": {"$ref": "#/components/schemas/Slug"},
+          "vendor_name": {"type": "string"},
+          "vendor_category": {"$ref": "#/components/schemas/VendorCategory"},
+          "aggregate_health": {
+            "allOf": [{"$ref": "#/components/schemas/HealthState"}],
+            "description": "Worst-state rollup across this vendor service's data sources."
+          },
+          "last_updated": {"$ref": "#/components/schemas/Iso8601"},
+          "data_sources": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/DataSource"},
+            "description": "One entry per data_sources bundle entry that has at least one integration in the requesting org. Two entries can share a display_name when the same sub-product is reachable via multiple products — data_source_id distinguishes them."
+          },
+          "unavailable_products": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/UnavailableProduct"}
+          },
+          "metadata": {"$ref": "#/components/schemas/ResponseMetadata"}
+        }
+      }
+    }
+  }
+}
