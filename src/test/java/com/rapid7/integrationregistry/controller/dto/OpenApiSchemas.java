@@ -37,7 +37,15 @@ final class OpenApiSchemas {
 
   private OpenApiSchemas() {}
 
-  /** Validates {@code node} against the named component schema; empty set means conformant. */
+  /**
+   * Validates {@code node} against the named component schema; empty set means conformant.
+   *
+   * <p>The contract schemas do not set {@code additionalProperties: false}, so an empty result
+   * confirms required fields, types, and enum values — but does NOT reject extra/unexpected
+   * properties. Tests that must prove an internal-only field never leaks (e.g. {@code
+   * data_source_id} on the wire Integration) assert that explicitly with {@code doesNotContain}
+   * rather than relying on schema validation alone.
+   */
   static Set<ValidationMessage> validate(String schemaName, JsonNode node) {
     return CACHE.computeIfAbsent(schemaName, OpenApiSchemas::buildSchema).validate(node);
   }
