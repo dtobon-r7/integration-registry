@@ -1,7 +1,15 @@
 /**
  * Read-API projection records produced by {@link
- * com.rapid7.integrationregistry.aggregator.VendorAggregator} and serialized by the controller
- * layer.
+ * com.rapid7.integrationregistry.aggregator.VendorAggregator} — the aggregator's internal output
+ * contract consumed by {@code VendorService}, NOT the wire surface.
+ *
+ * <p>The public JSON wire surface is {@code com.rapid7.integrationregistry.controller.dto}. These
+ * projection records are the source of each wire field's value, but they carry internal-only fields
+ * (e.g. {@code dataSourceId} on {@link
+ * com.rapid7.integrationregistry.aggregator.projection.IntegrationDetail}, {@code
+ * vendorServicesCount} on {@link
+ * com.rapid7.integrationregistry.aggregator.projection.VendorScopedView}) and Java-native enums
+ * that do not appear on the wire.
  *
  * <p>Each record maps directly to a response body or embedded object in RFC-001 §Read API Contract:
  *
