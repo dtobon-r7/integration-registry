@@ -3,14 +3,25 @@ package com.rapid7.integrationregistry.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
+import com.rapid7.integrationregistry.adapter.IntegrationStatus;
 import com.rapid7.integrationregistry.aggregator.VendorAggregator;
+import com.rapid7.integrationregistry.aggregator.projection.DataSourceDetail;
+import com.rapid7.integrationregistry.aggregator.projection.IntegrationDetail;
+import com.rapid7.integrationregistry.aggregator.projection.IntegrationTypeCount;
+import com.rapid7.integrationregistry.aggregator.projection.VendorScopedView;
+import com.rapid7.integrationregistry.aggregator.projection.VendorServiceCard;
+import com.rapid7.integrationregistry.aggregator.projection.VendorServiceDetail;
 import com.rapid7.integrationregistry.auth.OutboundAuth;
+import com.rapid7.integrationregistry.controller.dto.HealthState;
+import com.rapid7.integrationregistry.controller.dto.VendorDetailResponse;
+import com.rapid7.integrationregistry.controller.dto.VendorServiceDetailResponse;
 import com.rapid7.integrationregistry.controller.dto.VendorServicesResponse;
 import com.rapid7.integrationregistry.coordinator.FanOutCoordinator;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -146,5 +157,202 @@ class VendorServiceTest {
     VendorServicesResponse resp = service.listVendorServices(ORG, OutboundAuth.empty());
 
     assertThat(resp.unavailableProducts()).isEmpty();
+  }
+
+  // ----- detail routes: 404-vs-partial rule -----
+
+  @Test
+  void vendorServiceDetail_notFound_whenAggregatorEmptyAndNoUnavailable() {
+    when(coordinator.fetchAll(ORG, OutboundAuth.empty()))
+        .thenReturn(List.of(VendorServiceFixtures.served("InsightConnect", NOW, true)));
+    when(aggregator.mappingVersion()).thenReturn("v1.0.0");
+    when(aggregator.toVendorServiceDetail(ArgumentMatchers.eq("nope"), ArgumentMatchers.anyList()))
+        .thenReturn(Optional.empty());
+
+    Optional<VendorServiceDetailResponse> resp =
+        service.getVendorServiceDetail(ORG, "nope", OutboundAuth.empty());
+
+    assertThat(resp).isEmpty();
+  }
+
+  @Test
+  void vendorServiceDetail_emptyPayload200_whenAggregatorEmptyButProductUnavailable() {
+    when(coordinator.fetchAll(ORG, OutboundAuth.empty()))
+        .thenReturn(List.of(VendorServiceFixtures.unavailable("InsightConnect", "timeout")));
+    when(aggregator.mappingVersion()).thenReturn("v1.0.0");
+    when(aggregator.toVendorServiceDetail(
+            ArgumentMatchers.eq("ms-defender"), ArgumentMatchers.anyList()))
+        .thenReturn(Optional.empty());
+
+    Optional<VendorServiceDetailResponse> resp =
+        service.getVendorServiceDetail(ORG, "ms-defender", OutboundAuth.empty());
+
+    assertThat(resp).isPresent();
+    VendorServiceDetailResponse body = resp.get();
+    assertThat(body.dataSources()).isEmpty();
+    assertThat(body.unavailableProducts()).hasSize(1);
+    assertThat(body.vendorServiceId()).isEqualTo("ms-defender");
+    assertThat(body.vendorServiceName()).isEqualTo("ms-defender");
+    assertThat(body.vendorId()).isEqualTo("unknown");
+    assertThat(body.vendorName()).isEqualTo("Unknown");
+    assertThat(body.vendorCategory()).isEqualTo("other");
+    assertThat(body.aggregateHealth()).isEqualTo(HealthState.MISSING_DATA);
+    assertThat(body.lastUpdated()).isEqualTo(body.metadata().asOf());
+  }
+
+  @Test
+  void vendorServiceDetail_present200_mapsProjectionFields() {
+    when(coordinator.fetchAll(ORG, OutboundAuth.empty()))
+        .thenReturn(List.of(VendorServiceFixtures.served("InsightIDR", NOW, true)));
+    when(aggregator.mappingVersion()).thenReturn("v1.0.0");
+    VendorServiceDetail projection = vendorServiceDetailFixture();
+    when(aggregator.toVendorServiceDetail(
+            ArgumentMatchers.eq("ms-defender"), ArgumentMatchers.anyList()))
+        .thenReturn(Optional.of(projection));
+    when(aggregator.wireCategoryOf(projection)).thenReturn("siem");
+
+    Optional<VendorServiceDetailResponse> resp =
+        service.getVendorServiceDetail(ORG, "ms-defender", OutboundAuth.empty());
+
+    assertThat(resp).isPresent();
+    VendorServiceDetailResponse body = resp.get();
+    assertThat(body.vendorServiceId()).isEqualTo("ms-defender");
+    assertThat(body.vendorServiceName()).isEqualTo("Microsoft Defender");
+    assertThat(body.vendorId()).isEqualTo("microsoft");
+    assertThat(body.vendorName()).isEqualTo("Microsoft");
+    assertThat(body.vendorCategory()).isEqualTo("siem");
+    assertThat(body.aggregateHealth()).isEqualTo(HealthState.WARNING);
+    assertThat(body.lastUpdated()).isEqualTo(Instant.parse("2026-06-02T00:00:00Z"));
+    assertThat(body.dataSources()).hasSize(1);
+    var ds = body.dataSources().get(0);
+    assertThat(ds.dataSourceId()).isEqualTo("ds-1");
+    assertThat(ds.status()).isEqualTo(HealthState.WARNING);
+    assertThat(ds.integrationsCount()).isEqualTo(1);
+    assertThat(ds.integrations()).hasSize(1);
+    var in = ds.integrations().get(0);
+    assertThat(in.integrationId()).isEqualTo("i-1");
+    assertThat(in.integrationLabel()).isEqualTo("Prod tenant");
+    assertThat(in.status()).isEqualTo(HealthState.HEALTHY);
+  }
+
+  @Test
+  void vendorDetail_notFound_whenAggregatorEmptyAndNoUnavailable() {
+    when(coordinator.fetchAll(ORG, OutboundAuth.empty()))
+        .thenReturn(List.of(VendorServiceFixtures.served("InsightConnect", NOW, true)));
+    when(aggregator.mappingVersion()).thenReturn("v1.0.0");
+    when(aggregator.toVendorScopedView(ArgumentMatchers.eq("nope"), ArgumentMatchers.anyList()))
+        .thenReturn(Optional.empty());
+
+    Optional<VendorDetailResponse> resp =
+        service.getVendorDetail(ORG, "nope", OutboundAuth.empty());
+
+    assertThat(resp).isEmpty();
+  }
+
+  @Test
+  void vendorDetail_emptyPayload200_whenAggregatorEmptyButProductUnavailable() {
+    when(coordinator.fetchAll(ORG, OutboundAuth.empty()))
+        .thenReturn(List.of(VendorServiceFixtures.unavailable("InsightConnect", "upstream_5xx")));
+    when(aggregator.mappingVersion()).thenReturn("v1.0.0");
+    when(aggregator.toVendorScopedView(
+            ArgumentMatchers.eq("microsoft"), ArgumentMatchers.anyList()))
+        .thenReturn(Optional.empty());
+
+    Optional<VendorDetailResponse> resp =
+        service.getVendorDetail(ORG, "microsoft", OutboundAuth.empty());
+
+    assertThat(resp).isPresent();
+    VendorDetailResponse body = resp.get();
+    assertThat(body.vendorServices()).isEmpty();
+    assertThat(body.unavailableProducts()).hasSize(1);
+    assertThat(body.vendorId()).isEqualTo("microsoft");
+    assertThat(body.vendorName()).isEqualTo("Unknown");
+    assertThat(body.aggregateHealth()).isEqualTo(HealthState.MISSING_DATA);
+    assertThat(body.lastUpdated()).isEqualTo(body.metadata().asOf());
+  }
+
+  @Test
+  void vendorDetail_present200_mapsProjectionFields() {
+    when(coordinator.fetchAll(ORG, OutboundAuth.empty()))
+        .thenReturn(List.of(VendorServiceFixtures.served("InsightIDR", NOW, true)));
+    when(aggregator.mappingVersion()).thenReturn("v1.0.0");
+    VendorServiceCard card = vendorServiceCardFixture();
+    VendorScopedView projection =
+        new VendorScopedView(
+            "microsoft",
+            "Microsoft",
+            1,
+            IntegrationStatus.WARNING,
+            Instant.parse("2026-06-02T00:00:00Z"),
+            List.of(card));
+    when(aggregator.toVendorScopedView(
+            ArgumentMatchers.eq("microsoft"), ArgumentMatchers.anyList()))
+        .thenReturn(Optional.of(projection));
+    when(aggregator.wireCategoryOf(card)).thenReturn("siem");
+
+    Optional<VendorDetailResponse> resp =
+        service.getVendorDetail(ORG, "microsoft", OutboundAuth.empty());
+
+    assertThat(resp).isPresent();
+    VendorDetailResponse body = resp.get();
+    assertThat(body.vendorId()).isEqualTo("microsoft");
+    assertThat(body.vendorName()).isEqualTo("Microsoft");
+    assertThat(body.aggregateHealth()).isEqualTo(HealthState.WARNING);
+    assertThat(body.lastUpdated()).isEqualTo(Instant.parse("2026-06-02T00:00:00Z"));
+    assertThat(body.vendorServices()).hasSize(1);
+    var nested = body.vendorServices().get(0);
+    assertThat(nested.vendorServiceId()).isEqualTo("ms-defender");
+    assertThat(nested.vendorServiceName()).isEqualTo("Microsoft Defender");
+    assertThat(nested.vendorCategory()).isEqualTo("siem");
+    assertThat(nested.aggregateHealth()).isEqualTo(HealthState.WARNING);
+    assertThat(nested.integrationsConnected()).isEqualTo(1);
+  }
+
+  // ----- projection fixtures (respect record invariants) -----
+
+  private static VendorServiceCard vendorServiceCardFixture() {
+    return new VendorServiceCard(
+        "ms-defender",
+        "Microsoft Defender",
+        "microsoft",
+        "Microsoft",
+        com.rapid7.integrationregistry.mapping.VendorCategory.SIEM,
+        1,
+        List.of(new IntegrationTypeCount("SIEM Event Source", 1, 0)),
+        List.of("InsightIDR"),
+        IntegrationStatus.WARNING,
+        Instant.parse("2026-06-02T00:00:00Z"));
+  }
+
+  private static VendorServiceDetail vendorServiceDetailFixture() {
+    IntegrationDetail integration =
+        new IntegrationDetail(
+            "i-1",
+            "ds-1",
+            "Prod tenant",
+            IntegrationStatus.HEALTHY,
+            Instant.parse("2026-06-01T00:00:00Z"),
+            "https://example/config");
+    DataSourceDetail dataSource =
+        new DataSourceDetail(
+            "ds-1",
+            "Microsoft Defender",
+            "SIEM Event Source",
+            "InsightIDR",
+            IntegrationStatus.WARNING,
+            1,
+            List.of(integration));
+    return new VendorServiceDetail(
+        "ms-defender",
+        "Microsoft Defender",
+        "microsoft",
+        "Microsoft",
+        com.rapid7.integrationregistry.mapping.VendorCategory.SIEM,
+        1,
+        List.of(new IntegrationTypeCount("SIEM Event Source", 1, 0)),
+        List.of("InsightIDR"),
+        IntegrationStatus.WARNING,
+        Instant.parse("2026-06-02T00:00:00Z"),
+        List.of(dataSource));
   }
 }

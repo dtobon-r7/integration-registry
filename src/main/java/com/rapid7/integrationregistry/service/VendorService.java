@@ -3,16 +3,25 @@ package com.rapid7.integrationregistry.service;
 import com.rapid7.integrationregistry.adapter.IntegrationStatus;
 import com.rapid7.integrationregistry.adapter.NormalizedIntegration;
 import com.rapid7.integrationregistry.aggregator.VendorAggregator;
+import com.rapid7.integrationregistry.aggregator.projection.DataSourceDetail;
+import com.rapid7.integrationregistry.aggregator.projection.IntegrationDetail;
 import com.rapid7.integrationregistry.aggregator.projection.VendorCard;
+import com.rapid7.integrationregistry.aggregator.projection.VendorScopedView;
 import com.rapid7.integrationregistry.aggregator.projection.VendorServiceCard;
+import com.rapid7.integrationregistry.aggregator.projection.VendorServiceDetail;
 import com.rapid7.integrationregistry.auth.OutboundAuth;
+import com.rapid7.integrationregistry.controller.dto.DataSourceDto;
 import com.rapid7.integrationregistry.controller.dto.HealthState;
+import com.rapid7.integrationregistry.controller.dto.IntegrationDto;
 import com.rapid7.integrationregistry.controller.dto.IntegrationTypeCountDto;
 import com.rapid7.integrationregistry.controller.dto.ResponseMetadataDto;
 import com.rapid7.integrationregistry.controller.dto.UnavailableProductDto;
 import com.rapid7.integrationregistry.controller.dto.UnavailableReason;
+import com.rapid7.integrationregistry.controller.dto.VendorDetailResponse;
 import com.rapid7.integrationregistry.controller.dto.VendorListEntryDto;
 import com.rapid7.integrationregistry.controller.dto.VendorServiceCardDto;
+import com.rapid7.integrationregistry.controller.dto.VendorServiceCardNestedDto;
+import com.rapid7.integrationregistry.controller.dto.VendorServiceDetailResponse;
 import com.rapid7.integrationregistry.controller.dto.VendorServicesResponse;
 import com.rapid7.integrationregistry.controller.dto.VendorsResponse;
 import com.rapid7.integrationregistry.coordinator.FanOutCoordinator;
@@ -22,6 +31,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import org.springframework.stereotype.Service;
 
 /**
@@ -33,6 +43,16 @@ import org.springframework.stereotype.Service;
  * oldest contributing fetch, {@code cache_hit} requires every product fresh, and 404 is asserted
  * only when fresh and stale both confirm emptiness.
  */
+// CouplingBetweenObjects + TooManyMethods: this class is the read-path assembly point for all four
+// routes. By design it touches every Plan-01 response DTO, its nested DTOs, and the aggregator
+// projection records it maps from — the coupling and method count are inherent to "assemble the
+// wire
+// contract from projections", not accidental. One assembly helper per response shape (list/detail x
+// vendor/vendor-service) plus the shared spine pushes both metrics past the project thresholds.
+// Splitting the assembly across helper classes would only relocate the same fan-in. Suppressed
+// locally and justified rather than weakening the project-wide thresholds, mirroring the existing
+// precedent on FanOutCoordinator and VendorAggregator.
+@SuppressWarnings({"PMD.CouplingBetweenObjects", "PMD.TooManyMethods"})
 @Service
 public class VendorService {
 
@@ -139,6 +159,148 @@ public class VendorService {
       case MISSING_DATA -> HealthState.MISSING_DATA;
       case DISABLED -> HealthState.DISABLED;
     };
+  }
+
+  // ----- detail routes + 404-vs-partial rule -----
+
+  private static final String UNKNOWN_ID = "unknown";
+  private static final String UNKNOWN_NAME = "Unknown";
+  private static final String WIRE_CATEGORY_OTHER = "other";
+
+  public Optional<VendorServiceDetailResponse> getVendorServiceDetail(
+      String orgId, String vendorServiceId, OutboundAuth auth) {
+    List<ProductOutcome> outcomes = coordinator.fetchAll(orgId, auth);
+    ResponseMetadataDto metadata = metadata(outcomes);
+    List<UnavailableProductDto> unavailable = unavailableProducts(outcomes);
+    Optional<VendorServiceDetail> projection =
+        aggregator.toVendorServiceDetail(vendorServiceId, contributing(outcomes));
+
+    if (projection.isPresent()) {
+      return Optional.of(toVendorServiceDetailResponse(projection.get(), unavailable, metadata));
+    }
+    if (unavailable.isEmpty()) {
+      return Optional.empty(); // fresh AND stale both confirm emptiness -> 404
+    }
+    return Optional.of(emptyVendorServiceDetail(vendorServiceId, unavailable, metadata));
+  }
+
+  public Optional<VendorDetailResponse> getVendorDetail(
+      String orgId, String vendorId, OutboundAuth auth) {
+    List<ProductOutcome> outcomes = coordinator.fetchAll(orgId, auth);
+    ResponseMetadataDto metadata = metadata(outcomes);
+    List<UnavailableProductDto> unavailable = unavailableProducts(outcomes);
+    Optional<VendorScopedView> projection =
+        aggregator.toVendorScopedView(vendorId, contributing(outcomes));
+
+    if (projection.isPresent()) {
+      return Optional.of(toVendorDetailResponse(projection.get(), unavailable, metadata));
+    }
+    if (unavailable.isEmpty()) {
+      return Optional.empty();
+    }
+    return Optional.of(emptyVendorDetail(vendorId, unavailable, metadata));
+  }
+
+  // ----- detail assembly -----
+
+  private VendorServiceDetailResponse toVendorServiceDetailResponse(
+      VendorServiceDetail d,
+      List<UnavailableProductDto> unavailable,
+      ResponseMetadataDto metadata) {
+    List<DataSourceDto> dataSources = new ArrayList<>(d.dataSources().size());
+    for (DataSourceDetail ds : d.dataSources()) {
+      List<IntegrationDto> integrations = new ArrayList<>(ds.integrations().size());
+      for (IntegrationDetail in : ds.integrations()) {
+        integrations.add(
+            new IntegrationDto(
+                in.integrationId(),
+                in.integrationLabel(),
+                healthOf(in.status()),
+                in.lastSuccessTimestamp(),
+                in.configurationUrl()));
+      }
+      dataSources.add(
+          new DataSourceDto(
+              ds.dataSourceId(),
+              ds.displayName(),
+              ds.integrationType(),
+              ds.productName(),
+              healthOf(ds.status()),
+              ds.integrationsCount(),
+              integrations));
+    }
+    return new VendorServiceDetailResponse(
+        d.vendorServiceId(),
+        d.vendorServiceName(),
+        d.vendorId(),
+        d.vendorName(),
+        aggregator.wireCategoryOf(d),
+        healthOf(d.aggregateHealth()),
+        d.lastUpdated() != null ? d.lastUpdated() : metadata.asOf(),
+        dataSources,
+        unavailable,
+        metadata);
+  }
+
+  private VendorServiceDetailResponse emptyVendorServiceDetail(
+      String vendorServiceId,
+      List<UnavailableProductDto> unavailable,
+      ResponseMetadataDto metadata) {
+    return new VendorServiceDetailResponse(
+        vendorServiceId,
+        vendorServiceId,
+        UNKNOWN_ID,
+        UNKNOWN_NAME,
+        WIRE_CATEGORY_OTHER,
+        HealthState.MISSING_DATA,
+        metadata.asOf(),
+        List.of(),
+        unavailable,
+        metadata);
+  }
+
+  private VendorDetailResponse toVendorDetailResponse(
+      VendorScopedView v, List<UnavailableProductDto> unavailable, ResponseMetadataDto metadata) {
+    List<VendorServiceCardNestedDto> nested = new ArrayList<>(v.vendorServices().size());
+    for (VendorServiceCard card : v.vendorServices()) {
+      List<IntegrationTypeCountDto> typeCounts =
+          new ArrayList<>(card.integrationTypeCounts().size());
+      card.integrationTypeCounts()
+          .forEach(
+              c ->
+                  typeCounts.add(
+                      new IntegrationTypeCountDto(c.integrationType(), c.total(), c.errorCount())));
+      nested.add(
+          new VendorServiceCardNestedDto(
+              card.vendorServiceId(),
+              card.vendorServiceName(),
+              aggregator.wireCategoryOf(card),
+              card.integrationsConnected(),
+              typeCounts,
+              card.productsConnected(),
+              healthOf(card.aggregateHealth()),
+              card.lastUpdated() != null ? card.lastUpdated() : metadata.asOf()));
+    }
+    return new VendorDetailResponse(
+        v.vendorId(),
+        v.vendorName(),
+        healthOf(v.aggregateHealth()),
+        v.lastUpdated() != null ? v.lastUpdated() : metadata.asOf(),
+        nested,
+        unavailable,
+        metadata);
+  }
+
+  private VendorDetailResponse emptyVendorDetail(
+      String vendorId, List<UnavailableProductDto> unavailable, ResponseMetadataDto metadata) {
+    return new VendorDetailResponse(
+        vendorId,
+        UNKNOWN_NAME,
+        HealthState.MISSING_DATA,
+        metadata.asOf(),
+        List.of(),
+        unavailable,
+        metadata);
   }
 
   private VendorServiceCardDto toCardDto(VendorServiceCard card, Instant asOf) {
