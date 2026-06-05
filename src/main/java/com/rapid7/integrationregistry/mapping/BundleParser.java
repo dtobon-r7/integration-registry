@@ -1,8 +1,6 @@
 package com.rapid7.integrationregistry.mapping;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import com.networknt.schema.InputFormat;
 import com.networknt.schema.JsonSchema;
 import com.networknt.schema.JsonSchemaFactory;
 import com.networknt.schema.SpecVersion;
@@ -10,11 +8,15 @@ import com.networknt.schema.ValidationMessage;
 import com.rapid7.integrationregistry.mapping.exception.BundleParseException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.dataformat.yaml.YAMLMapper;
 
 /**
  * Parses a vendor-mapping bundle YAML document into an immutable {@link VendorMappingSnapshot}.
@@ -25,13 +27,12 @@ import java.util.Set;
  *
  * <p>This parser holds two final fields configured in the constructor and is intended for
  * single-threaded use on the boot / refresh path that the runtime loader owns. {@link
- * com.fasterxml.jackson.databind.ObjectMapper} is documented thread-safe once configured (which is
- * the case here), but {@link
- * com.networknt.schema.JsonSchema#validate(com.fasterxml.jackson.databind.JsonNode)} does not carry
- * an explicit thread-safety guarantee in the {@code com.networknt:json-schema-validator} 1.5.4
- * release notes. Callers sharing a single {@code BundleParser} instance across request-handler
- * threads must verify the validator's concurrency posture before relying on it; the boot/refresh
- * use case avoids the question entirely.
+ * tools.jackson.databind.ObjectMapper} is documented thread-safe once configured (which is the case
+ * here), but {@link com.networknt.schema.JsonSchema} validation does not carry an explicit
+ * thread-safety guarantee in the {@code com.networknt:json-schema-validator} 1.5.4 release notes.
+ * Callers sharing a single {@code BundleParser} instance across request-handler threads must verify
+ * the validator's concurrency posture before relying on it; the boot/refresh use case avoids the
+ * question entirely.
  *
  * <h2>Input expectations</h2>
  *
@@ -48,11 +49,11 @@ public final class BundleParser {
   private static final String SCHEMA_CLASSPATH = "/vendor-mapping/schema/v1.json";
   private static final String FIELD_YAML_STREAM = "yamlStream";
 
-  private final ObjectMapper yamlMapper;
+  private final YAMLMapper yamlMapper;
   private final JsonSchema schema;
 
   public BundleParser() {
-    this.yamlMapper = new ObjectMapper(new YAMLFactory());
+    this.yamlMapper = new YAMLMapper();
     this.schema = loadSchema();
   }
 
@@ -89,42 +90,54 @@ public final class BundleParser {
    */
   public VendorMappingSnapshot parse(InputStream yamlStream) throws BundleParseException {
     Objects.requireNonNull(yamlStream, FIELD_YAML_STREAM);
-    JsonNode tree = parseYaml(yamlStream);
-    Set<ValidationMessage> errors = schema.validate(tree);
+    String yaml = readFully(yamlStream);
+    // Parse first so a malformed-YAML document surfaces as yamlSyntaxError (cause =
+    // JacksonException)
+    // rather than a schema-validation failure — preserving the original error taxonomy. Validation
+    // then runs on the raw string: networknt is Jackson-2-internal, so we never hand it a Jackson 3
+    // JsonNode — it parses the string with its own (encapsulated) YAML parser.
+    JsonNode tree = parseYaml(yaml);
+    Set<ValidationMessage> errors = schema.validate(yaml, InputFormat.YAML);
     if (!errors.isEmpty()) {
       throw BundleParseException.schemaInvalid(errors);
     }
     return buildSnapshot(tree);
   }
 
-  private JsonNode parseYaml(InputStream yamlStream) throws BundleParseException {
+  private String readFully(InputStream yamlStream) throws BundleParseException {
     try {
-      return yamlMapper.readTree(yamlStream);
+      return new String(yamlStream.readAllBytes(), StandardCharsets.UTF_8);
     } catch (IOException ex) {
-      // Single catch (not split JacksonException/IOException) — PMD
-      // IdenticalCatchBranches. Cause carries the discriminating type.
+      throw BundleParseException.yamlSyntaxError(ex);
+    }
+  }
+
+  private JsonNode parseYaml(String yaml) throws BundleParseException {
+    try {
+      return yamlMapper.readTree(yaml);
+    } catch (JacksonException ex) {
       throw BundleParseException.yamlSyntaxError(ex);
     }
   }
 
   private VendorMappingSnapshot buildSnapshot(JsonNode tree) {
-    String mappingVersion = tree.at("/metadata/mapping_version").asText();
+    String mappingVersion = tree.at("/metadata/mapping_version").asString();
     Map<Object, VendorResolution> index = new HashMap<>();
     for (JsonNode vendor : tree.at("/spec/vendors")) {
-      String vendorId = vendor.get("id").asText();
-      String vendorName = vendor.get("name").asText();
+      String vendorId = vendor.get("id").asString();
+      String vendorName = vendor.get("name").asString();
       JsonNode services = vendor.get("services");
       if (services == null) {
         continue;
       }
       for (JsonNode service : services) {
-        String serviceId = service.get("id").asText();
-        String serviceName = service.get("name").asText();
+        String serviceId = service.get("id").asString();
+        String serviceName = service.get("name").asString();
         VendorCategory category =
             requireEnum(
-                VendorCategory.fromWireForm(service.get("category").asText()),
+                VendorCategory.fromWireForm(service.get("category").asString()),
                 "category",
-                service.get("category").asText());
+                service.get("category").asString());
         JsonNode dataSources = service.get("data_sources");
         if (dataSources == null) {
           continue;
@@ -132,15 +145,15 @@ public final class BundleParser {
         for (JsonNode ds : dataSources) {
           ProductName product =
               requireEnum(
-                  ProductName.fromWireForm(ds.get("product").asText()),
+                  ProductName.fromWireForm(ds.get("product").asString()),
                   "product",
-                  ds.get("product").asText());
+                  ds.get("product").asString());
           SourceType sourceType =
               requireEnum(
-                  SourceType.fromWireForm(ds.get("source_type").asText()),
+                  SourceType.fromWireForm(ds.get("source_type").asString()),
                   "source_type",
-                  ds.get("source_type").asText());
-          String sourceValue = ds.get("source_value").asText();
+                  ds.get("source_type").asString());
+          String sourceValue = ds.get("source_value").asString();
           VendorResolution resolution =
               new VendorResolution(serviceId, serviceName, category, vendorId, vendorName);
           index.put(
@@ -178,8 +191,11 @@ public final class BundleParser {
                 + SCHEMA_CLASSPATH
                 + ". This is a packaging defect.");
       }
-      JsonNode schemaNode = new ObjectMapper().readTree(in);
-      return JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012).getSchema(schemaNode);
+      // Hand networknt the schema as a JSON string (it parses with its own internal Jackson),
+      // so BundleParser never imports a Jackson 2 databind type.
+      String schemaJson = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+      return JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012)
+          .getSchema(schemaJson, InputFormat.JSON);
     } catch (IOException ex) {
       throw new IllegalStateException("Failed to load bundle schema from classpath", ex);
     }

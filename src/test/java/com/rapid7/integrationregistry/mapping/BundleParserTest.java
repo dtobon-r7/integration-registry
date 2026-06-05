@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
-import com.fasterxml.jackson.core.JacksonException;
 import com.networknt.schema.ValidationMessage;
 import com.rapid7.integrationregistry.mapping.exception.BundleParseException;
 import java.io.ByteArrayInputStream;
@@ -13,6 +12,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import tools.jackson.core.JacksonException;
 
 class BundleParserTest {
 

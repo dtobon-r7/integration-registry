@@ -2,16 +2,14 @@ package com.rapid7.integrationregistry.cache;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.json.JsonMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.rapid7.integrationregistry.adapter.FetchResult;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Serializes a {@link FetchResult} to a versioned JSON envelope for Valkey storage and back.
@@ -25,12 +23,12 @@ class FetchResultCodec {
 
   private static final Logger log = LoggerFactory.getLogger(FetchResultCodec.class);
   private static final int CURRENT_VERSION = 1;
+  // Jackson 3 bundles java.time support in databind (JSR-310 was merged in), so no module
+  // registration is needed, and WRITE_DATES_AS_TIMESTAMPS is disabled by default — Instants
+  // already serialize as ISO-8601 strings. Only the unknown-property tolerance (forward-compat
+  // for cache schema changes) needs an explicit override.
   private static final ObjectMapper MAPPER =
-      JsonMapper.builder()
-          .addModule(new JavaTimeModule())
-          .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-          .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-          .build();
+      JsonMapper.builder().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).build();
 
   /** JSON envelope wrapping a payload with its schema version. */
   private record Envelope(@JsonProperty("v") int v, @JsonProperty("payload") FetchResult payload) {
@@ -41,7 +39,7 @@ class FetchResultCodec {
   String encode(FetchResult result) {
     try {
       return MAPPER.writeValueAsString(new Envelope(CURRENT_VERSION, result));
-    } catch (JsonProcessingException e) {
+    } catch (JacksonException e) {
       // FetchResult is a plain record of serializable fields; this should not happen.
       throw new IllegalStateException("Failed to encode FetchResult for cache", e);
     }
@@ -58,7 +56,7 @@ class FetchResultCodec {
         return Optional.empty();
       }
       return Optional.of(envelope.payload());
-    } catch (JsonProcessingException e) {
+    } catch (JacksonException e) {
       log.debug("Cache payload unreadable; treating as miss", e);
       return Optional.empty();
     }
