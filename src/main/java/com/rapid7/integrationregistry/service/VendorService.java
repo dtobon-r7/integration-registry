@@ -143,12 +143,10 @@ public class VendorService {
   // ----- translation -----
 
   static UnavailableReason reasonOf(String wire) {
-    for (UnavailableReason r : UnavailableReason.values()) {
-      if (r.wire().equals(wire)) {
-        return r;
-      }
-    }
-    throw new IllegalStateException("Unknown unavailable reason from coordinator: " + wire);
+    return UnavailableReason.fromWire(wire)
+        .orElseThrow(
+            () ->
+                new IllegalStateException("Unknown unavailable reason from coordinator: " + wire));
   }
 
   static HealthState healthOf(IntegrationStatus status) {
@@ -159,6 +157,17 @@ public class VendorService {
       case MISSING_DATA -> HealthState.MISSING_DATA;
       case DISABLED -> HealthState.DISABLED;
     };
+  }
+
+  /** The DTO requires a non-null {@code lastUpdated}; fall back to {@code as_of} when null. */
+  private static Instant lastUpdatedOr(Instant projected, Instant asOf) {
+    return projected != null ? projected : asOf;
+  }
+
+  private static List<IntegrationTypeCountDto> typeCountDtos(VendorServiceCard card) {
+    return card.integrationTypeCounts().stream()
+        .map(c -> new IntegrationTypeCountDto(c.integrationType(), c.total(), c.errorCount()))
+        .toList();
   }
 
   // ----- detail routes + 404-vs-partial rule -----
@@ -236,7 +245,7 @@ public class VendorService {
         d.vendorName(),
         aggregator.wireCategoryOf(d),
         healthOf(d.aggregateHealth()),
-        d.lastUpdated() != null ? d.lastUpdated() : metadata.asOf(),
+        lastUpdatedOr(d.lastUpdated(), metadata.asOf()),
         dataSources,
         unavailable,
         metadata);
@@ -263,32 +272,28 @@ public class VendorService {
       VendorScopedView v, List<UnavailableProductDto> unavailable, ResponseMetadataDto metadata) {
     List<VendorServiceCardNestedDto> nested = new ArrayList<>(v.vendorServices().size());
     for (VendorServiceCard card : v.vendorServices()) {
-      List<IntegrationTypeCountDto> typeCounts =
-          new ArrayList<>(card.integrationTypeCounts().size());
-      card.integrationTypeCounts()
-          .forEach(
-              c ->
-                  typeCounts.add(
-                      new IntegrationTypeCountDto(c.integrationType(), c.total(), c.errorCount())));
-      nested.add(
-          new VendorServiceCardNestedDto(
-              card.vendorServiceId(),
-              card.vendorServiceName(),
-              aggregator.wireCategoryOf(card),
-              card.integrationsConnected(),
-              typeCounts,
-              card.productsConnected(),
-              healthOf(card.aggregateHealth()),
-              card.lastUpdated() != null ? card.lastUpdated() : metadata.asOf()));
+      nested.add(toNestedCardDto(card, metadata.asOf()));
     }
     return new VendorDetailResponse(
         v.vendorId(),
         v.vendorName(),
         healthOf(v.aggregateHealth()),
-        v.lastUpdated() != null ? v.lastUpdated() : metadata.asOf(),
+        lastUpdatedOr(v.lastUpdated(), metadata.asOf()),
         nested,
         unavailable,
         metadata);
+  }
+
+  private VendorServiceCardNestedDto toNestedCardDto(VendorServiceCard card, Instant asOf) {
+    return new VendorServiceCardNestedDto(
+        card.vendorServiceId(),
+        card.vendorServiceName(),
+        aggregator.wireCategoryOf(card),
+        card.integrationsConnected(),
+        typeCountDtos(card),
+        card.productsConnected(),
+        healthOf(card.aggregateHealth()),
+        lastUpdatedOr(card.lastUpdated(), asOf));
   }
 
   private VendorDetailResponse emptyVendorDetail(
@@ -304,12 +309,6 @@ public class VendorService {
   }
 
   private VendorServiceCardDto toCardDto(VendorServiceCard card, Instant asOf) {
-    List<IntegrationTypeCountDto> typeCounts = new ArrayList<>(card.integrationTypeCounts().size());
-    card.integrationTypeCounts()
-        .forEach(
-            c ->
-                typeCounts.add(
-                    new IntegrationTypeCountDto(c.integrationType(), c.total(), c.errorCount())));
     return new VendorServiceCardDto(
         card.vendorServiceId(),
         card.vendorServiceName(),
@@ -317,9 +316,9 @@ public class VendorService {
         card.vendorName(),
         aggregator.wireCategoryOf(card),
         card.integrationsConnected(),
-        typeCounts,
+        typeCountDtos(card),
         card.productsConnected(),
         healthOf(card.aggregateHealth()),
-        card.lastUpdated() != null ? card.lastUpdated() : asOf);
+        lastUpdatedOr(card.lastUpdated(), asOf));
   }
 }
