@@ -45,4 +45,8 @@ class LayerDependencyRulesTest {
   @ArchTest
   static final ArchRule adapterExceptions_shouldExtendAdapterExceptionParent =
       LayerDependencyRules.adapterExceptions_shouldExtendAdapterExceptionParent;
+
+  @ArchTest
+  static final ArchRule authLayer_shouldBeAFrameworkNeutralLeaf =
+      LayerDependencyRules.authLayer_shouldBeAFrameworkNeutralLeaf;
 }
