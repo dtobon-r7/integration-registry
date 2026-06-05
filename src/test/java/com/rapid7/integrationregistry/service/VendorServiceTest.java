@@ -1,21 +1,29 @@
 package com.rapid7.integrationregistry.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 import com.rapid7.integrationregistry.adapter.IntegrationStatus;
+import com.rapid7.integrationregistry.adapter.exception.AdapterAuthException;
+import com.rapid7.integrationregistry.adapter.exception.AdapterException;
+import com.rapid7.integrationregistry.adapter.exception.AdapterTimeoutException;
+import com.rapid7.integrationregistry.adapter.exception.AdapterUpstreamException;
 import com.rapid7.integrationregistry.aggregator.VendorAggregator;
 import com.rapid7.integrationregistry.aggregator.projection.DataSourceDetail;
 import com.rapid7.integrationregistry.aggregator.projection.IntegrationDetail;
 import com.rapid7.integrationregistry.aggregator.projection.IntegrationTypeCount;
+import com.rapid7.integrationregistry.aggregator.projection.VendorCard;
 import com.rapid7.integrationregistry.aggregator.projection.VendorScopedView;
 import com.rapid7.integrationregistry.aggregator.projection.VendorServiceCard;
 import com.rapid7.integrationregistry.aggregator.projection.VendorServiceDetail;
 import com.rapid7.integrationregistry.auth.OutboundAuth;
 import com.rapid7.integrationregistry.controller.dto.HealthState;
 import com.rapid7.integrationregistry.controller.dto.VendorDetailResponse;
+import com.rapid7.integrationregistry.controller.dto.VendorListEntryDto;
 import com.rapid7.integrationregistry.controller.dto.VendorServiceDetailResponse;
 import com.rapid7.integrationregistry.controller.dto.VendorServicesResponse;
+import com.rapid7.integrationregistry.controller.dto.VendorsResponse;
 import com.rapid7.integrationregistry.coordinator.FanOutCoordinator;
 import java.time.Clock;
 import java.time.Instant;
@@ -25,6 +33,9 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -157,6 +168,122 @@ class VendorServiceTest {
     VendorServicesResponse resp = service.listVendorServices(ORG, OutboundAuth.empty());
 
     assertThat(resp.unavailableProducts()).isEmpty();
+  }
+
+  // ----- F1: listVendors route -----
+
+  @Test
+  void listVendors_mapsVendorCardsAndPopulatesEnvelope() {
+    when(coordinator.fetchAll(ORG, OutboundAuth.empty()))
+        .thenReturn(List.of(VendorServiceFixtures.served("InsightIDR", NOW, true)));
+    when(aggregator.mappingVersion()).thenReturn("v1.0.0");
+    when(aggregator.toVendorCards(ArgumentMatchers.anyList()))
+        .thenReturn(List.of(new VendorCard("microsoft", "Microsoft", 3)));
+
+    VendorsResponse resp = service.listVendors(ORG, OutboundAuth.empty());
+
+    assertThat(resp.vendors()).hasSize(1);
+    VendorListEntryDto entry = resp.vendors().get(0);
+    assertThat(entry.vendorId()).isEqualTo("microsoft");
+    assertThat(entry.vendorName()).isEqualTo("Microsoft");
+    assertThat(entry.vendorServicesCount()).isEqualTo(3);
+    // metadata + unavailableProducts envelope is populated (a single fresh hit -> cacheHit true).
+    assertThat(resp.metadata().mappingVersion()).isEqualTo("v1.0.0");
+    assertThat(resp.metadata().asOf()).isEqualTo(NOW);
+    assertThat(resp.metadata().cacheHit()).isTrue();
+    assertThat(resp.unavailableProducts()).isEmpty();
+  }
+
+  // ----- F2: healthOf maps all 5 IntegrationStatus values to the wire HealthState -----
+
+  @ParameterizedTest
+  @EnumSource(IntegrationStatus.class)
+  void healthOf_mapsEveryIntegrationStatusToMatchingHealthState(IntegrationStatus status) {
+    when(coordinator.fetchAll(ORG, OutboundAuth.empty()))
+        .thenReturn(List.of(VendorServiceFixtures.served("InsightIDR", NOW, true)));
+    when(aggregator.mappingVersion()).thenReturn("v1.0.0");
+    when(aggregator.toVendorServiceCards(ArgumentMatchers.anyList()))
+        .thenReturn(List.of(vendorServiceCardWithHealth(status)));
+    when(aggregator.wireCategoryOf(ArgumentMatchers.<VendorServiceCard>any())).thenReturn("siem");
+
+    VendorServicesResponse resp = service.listVendorServices(ORG, OutboundAuth.empty());
+
+    assertThat(resp.vendorServices()).hasSize(1);
+    assertThat(resp.vendorServices().get(0).aggregateHealth())
+        .isEqualTo(HealthState.valueOf(status.name()));
+  }
+
+  // ----- F3: a stale serve flips cache_hit to false -----
+
+  @Test
+  void cacheHit_falseWhenOnlyOutcomeIsStaleServe() {
+    Instant staleSince = Instant.parse("2026-06-04T00:00:00Z");
+    when(coordinator.fetchAll(ORG, OutboundAuth.empty()))
+        .thenReturn(
+            List.of(VendorServiceFixtures.staleServed("InsightIDR", NOW, staleSince, "timeout")));
+    when(aggregator.mappingVersion()).thenReturn("v1.0.0");
+    when(aggregator.toVendorServiceCards(ArgumentMatchers.anyList())).thenReturn(List.of());
+
+    VendorServicesResponse resp = service.listVendorServices(ORG, OutboundAuth.empty());
+
+    assertThat(resp.metadata().cacheHit()).isFalse();
+  }
+
+  // ----- F4: all-adapter-failure plurality -----
+
+  @Test
+  void unavailableProducts_carriesEveryFailedProductWithItsReason() {
+    when(coordinator.fetchAll(ORG, OutboundAuth.empty()))
+        .thenReturn(
+            List.of(
+                VendorServiceFixtures.unavailable("InsightConnect", "timeout"),
+                VendorServiceFixtures.unavailable("InsightIDR", "auth_failure")));
+    when(aggregator.mappingVersion()).thenReturn("v1.0.0");
+    when(aggregator.toVendorServiceCards(ArgumentMatchers.anyList())).thenReturn(List.of());
+
+    VendorServicesResponse resp = service.listVendorServices(ORG, OutboundAuth.empty());
+
+    assertThat(resp.unavailableProducts()).hasSize(2);
+    assertThat(resp.unavailableProducts())
+        .extracting(up -> up.productName(), up -> up.reason().wire())
+        .containsExactlyInAnyOrder(
+            org.assertj.core.groups.Tuple.tuple("InsightConnect", "timeout"),
+            org.assertj.core.groups.Tuple.tuple("InsightIDR", "auth_failure"));
+    // No Served outcomes -> as_of falls back to the fixed clock NOW.
+    assertThat(resp.metadata().asOf()).isEqualTo(NOW);
+  }
+
+  // ----- A1: reasonOf build-time guard — T07<->T09 reason coupling -----
+
+  @ParameterizedTest
+  @ValueSource(strings = {"timeout", "upstream_5xx", "auth_failure", "no_data"})
+  void reasonOf_resolvesEveryReasonCoordinatorCanEmit(String wire) {
+    // Sourced from the real producers of these strings:
+    //  - AdapterTimeoutException.reasonCode()  == "timeout"     (and
+    // OutcomeClassifier.REASON_TIMEOUT)
+    //  - AdapterUpstreamException.reasonCode() == "upstream_5xx"
+    //  - AdapterAuthException.reasonCode()     == "auth_failure"
+    //  - OutcomeClassifier.REASON_NO_DATA      == "no_data"
+    assertThat(VendorService.reasonOf(wire)).isNotNull();
+  }
+
+  @Test
+  void reasonOf_concreteAdapterExceptionReasonCodesAllResolve() {
+    List<AdapterException> exceptions =
+        List.of(
+            new AdapterTimeoutException("t"),
+            new AdapterUpstreamException("u"),
+            new AdapterAuthException("a"));
+    for (AdapterException ex : exceptions) {
+      assertThat(VendorService.reasonOf(ex.reasonCode())).isNotNull();
+    }
+  }
+
+  @Test
+  void reasonOf_unknownStringThrowsIllegalState() {
+    // Pins the fail-fast contract: an unmapped wire string must blow up, not silently default.
+    assertThatThrownBy(() -> VendorService.reasonOf("not_a_real_reason"))
+        .isInstanceOf(IllegalStateException.class);
   }
 
   // ----- detail routes: 404-vs-partial rule -----
@@ -311,6 +438,10 @@ class VendorServiceTest {
   // ----- projection fixtures (respect record invariants) -----
 
   private static VendorServiceCard vendorServiceCardFixture() {
+    return vendorServiceCardWithHealth(IntegrationStatus.WARNING);
+  }
+
+  private static VendorServiceCard vendorServiceCardWithHealth(IntegrationStatus health) {
     return new VendorServiceCard(
         "ms-defender",
         "Microsoft Defender",
@@ -320,7 +451,7 @@ class VendorServiceTest {
         1,
         List.of(new IntegrationTypeCount("SIEM Event Source", 1, 0)),
         List.of("InsightIDR"),
-        IntegrationStatus.WARNING,
+        health,
         Instant.parse("2026-06-02T00:00:00Z"));
   }
 
