@@ -14,6 +14,7 @@ import com.rapid7.integrationregistry.adapter.FetchResult;
 import com.rapid7.integrationregistry.adapter.exception.AdapterAuthException;
 import com.rapid7.integrationregistry.adapter.exception.AdapterTimeoutException;
 import com.rapid7.integrationregistry.adapter.exception.AdapterUpstreamException;
+import com.rapid7.integrationregistry.auth.OutboundAuth;
 import com.rapid7.integrationregistry.cache.IntegrationCache;
 import com.rapid7.integrationregistry.cache.StaleEntry;
 import java.time.Duration;
@@ -69,6 +70,24 @@ class FanOutCoordinatorTest {
               assertThat(served.stale()).isFalse();
               assertThat(served.fetchedAt()).isEqualTo(FETCHED_AT);
             });
+  }
+
+  @Test
+  void fetchAll_outboundAuthOverload_servesFromFreshTier() {
+    // Arrange: same fixture setup as fetchAll_shouldServeFromFreshTier_withoutCallingAdapter,
+    // but invoke via the OutboundAuth overload.
+    FetchResult cached = CoordinatorAdapterFixtures.sampleResult("InsightConnect", FETCHED_AT);
+    when(cache.readFresh(ORG, "InsightConnect")).thenReturn(Optional.of(cached));
+    var adapter = CoordinatorAdapterFixtures.success("InsightConnect");
+    FanOutCoordinator coordinator = new FanOutCoordinator(Set.of(adapter), cache, props());
+
+    // Act
+    List<ProductOutcome> outcomes =
+        coordinator.fetchAll(ORG, OutboundAuth.of(Map.of("X-IPIMS-ORG-ID", ORG)));
+
+    // Assert
+    assertThat(outcomes).hasSize(1);
+    assertThat(outcomes.get(0)).isInstanceOf(ProductOutcome.Served.class);
   }
 
   @Test
