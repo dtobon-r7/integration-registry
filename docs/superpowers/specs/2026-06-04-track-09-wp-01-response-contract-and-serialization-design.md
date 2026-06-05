@@ -112,7 +112,7 @@ inclusion (nulls render explicitly) by default.
 |---|---|---|
 | `integration_label` | nullable → render **explicit JSON null** | default `ALWAYS` inclusion |
 | `last_success_timestamp` | nullable → render **explicit JSON null** | default `ALWAYS` inclusion |
-| `last_updated` (cards, detail) | nullable → render **explicit JSON null** | default `ALWAYS` inclusion (see decision below) |
+| `last_updated` (cards, detail) | **required, non-null** per `openapi.json` → always a present ISO-8601 value | `Objects.requireNonNull` in compact constructor (see decision below) |
 | `stale_since` | **omitted** when absent; present only when `stale=true` | `@JsonInclude(NON_NULL)` on this field ONLY |
 
 ## Type catalog
@@ -148,7 +148,7 @@ required by this plan — serialization is one-way here (Registry → client).
 
 | Record | Fields |
 |---|---|
-| `VendorServiceCardDto` (flat) | `vendorServiceId, vendorServiceName, vendorId, vendorName, vendorCategory(String), integrationsConnected(int), List<IntegrationTypeCountDto> integrationTypeCounts, List<String> productsConnected, HealthState aggregateHealth, Instant lastUpdated▢` (10 fields) |
+| `VendorServiceCardDto` (flat) | `vendorServiceId, vendorServiceName, vendorId, vendorName, vendorCategory(String), integrationsConnected(int), List<IntegrationTypeCountDto> integrationTypeCounts, List<String> productsConnected, HealthState aggregateHealth, Instant lastUpdated` (10 fields, all required) |
 | `VendorServiceCardNestedDto` (vendor-scoped) | same as flat **minus** `vendorId`, `vendorName` (8 fields) |
 
 `vendorCategory`, `integrationType`, `productName` are plain `String` per the
@@ -163,9 +163,9 @@ Each wrapper carries `List<UnavailableProductDto> unavailableProducts` and
 | Record | Payload field |
 |---|---|
 | `VendorServicesResponse` | `List<VendorServiceCardDto> vendorServices` |
-| `VendorServiceDetailResponse` | header (`vendorServiceId, vendorServiceName, vendorId, vendorName, vendorCategory(String), aggregateHealth(HealthState), lastUpdated▢`) + `List<DataSourceDto> dataSources` |
+| `VendorServiceDetailResponse` | header (`vendorServiceId, vendorServiceName, vendorId, vendorName, vendorCategory(String), aggregateHealth(HealthState), lastUpdated`) + `List<DataSourceDto> dataSources` |
 | `VendorsResponse` | `List<VendorListEntryDto> vendors` |
-| `VendorDetailResponse` | `vendorId, vendorName, aggregateHealth(HealthState), lastUpdated▢` + `List<VendorServiceCardNestedDto> vendorServices` |
+| `VendorDetailResponse` | `vendorId, vendorName, aggregateHealth(HealthState), lastUpdated` + `List<VendorServiceCardNestedDto> vendorServices` |
 
 ## Decisions
 
@@ -185,17 +185,26 @@ Each wrapper carries `List<UnavailableProductDto> unavailableProducts` and
 
 ### `last_updated` nullability (design call)
 
-`openapi.json` marks `last_updated` as required on the cards and detail
-responses, but the existing projection records (`VendorServiceCard`,
-`VendorServiceDetail`, `VendorScopedView`) and the RFC entity notes treat it as
-nullable ("null when no instance has yet recorded a successful timestamp").
+`openapi.json` marks `last_updated` as **required and non-null** (an `Iso8601`
+string ref) on the cards and detail responses. The existing projection records
+(`VendorServiceCard`, `VendorServiceDetail`, `VendorScopedView`) and the RFC
+entity notes treat it as nullable ("null when no instance has yet recorded a
+successful timestamp"), so the two contracts disagree at this seam.
 
-**Decision**: model `lastUpdated` as **nullable, rendering explicit JSON null**,
-consistent with the projection records that feed it. The DTO does not enforce
-non-null because the value genuinely can be null at the source. This is a
-faithful representation of the data, not a contract violation — the field is
-always *present* (key emitted), satisfying "required" in the key-presence sense;
-its value may be `null`. Recorded here so it is a deliberate, reviewable choice.
+**Decision (revised at functional review)**: the **wire DTO is authoritative**
+and follows the locked `openapi.json` — `lastUpdated` is **required, non-null**,
+enforced via `Objects.requireNonNull` in the compact constructor (tests assert
+an NPE on null). The earlier draft modeled it as nullable/explicit-JSON-null to
+mirror the projection records; that was reversed because the wire contract does
+not permit null here.
+
+This pushes the reconciliation **down into Plan 02 assembly**: the
+projection→DTO mapping MUST supply a non-null `lastUpdated` rather than passing a
+projection's null through. The projection layer remains free to model
+`lastUpdated` as nullable; the DTO is the point where that nullability is
+resolved. **Open for Plan 02**: what value to use when the projection's
+`lastUpdated` is null (candidate: the response `asOf`/metadata timestamp) — this
+plan only fixes the wire contract (non-null), not the assembly-side fallback.
 
 ### `vendor_category` value mismatch (accepted risk, owned elsewhere)
 
@@ -244,8 +253,11 @@ surface; the projection records are an internal source-of-values.
   resolution, and exposes `validate(schemaName, jsonNode)` returning the
   validation message set (asserted empty).
 - **Null-vs-absent assertions** (the contract's subtle bits, explicit per field):
-  - `integration_label: null`, `last_success_timestamp: null`, `last_updated: null`
+  - `integration_label: null`, `last_success_timestamp: null`
     → key **present** with JSON null.
+  - `last_updated` → **required, non-null**: constructing a card/detail DTO with
+    a null `lastUpdated` throws `NullPointerException` (asserted), so it never
+    reaches the wire as null.
   - `stale_since` → key **absent** when `stale=false`/null; **present** when
     `stale=true`.
   - `vendor_id`/`vendor_name` → present on flat card, **absent** on nested card.

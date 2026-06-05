@@ -25,7 +25,7 @@
 
 1. **ArchUnit scans production classes only** (`@AnalyzeClasses(... ImportOption.DoNotIncludeTests.class)` in `LayerDependencyRulesTest`). The production `controller.dto` package MUST NOT import `..aggregator..`, `..mapping..`, `..adapter..`, `..coordinator..`. Test classes are exempt from the rule, but keep them clean anyway.
 2. **No global Jackson `@Configuration` bean.** snake_case is per-DTO via `@JsonNaming`. Default Jackson inclusion (`ALWAYS`) renders nulls explicitly; only `stale_since` gets `@JsonInclude(NON_NULL)`.
-3. **`IntegrationDto` has NO `data_source_id`.** `VendorServiceCardNestedDto` omits `vendor_id`/`vendor_name`. `last_updated` is nullable (explicit null). `vendor_category`/`integration_type`/`product_name` are plain `String`.
+3. **`IntegrationDto` has NO `data_source_id`.** `VendorServiceCardNestedDto` omits `vendor_id`/`vendor_name`. `last_updated` is **required + non-null** per `openapi.json` (`Objects.requireNonNull` in the compact constructor; tests assert NPE on null). `vendor_category`/`integration_type`/`product_name` are plain `String`.
 4. **Verification each checkpoint:** `./mvnw spotless:apply` then `./mvnw verify`. GJF is authoritative — never hand-format. The DTO tests are Docker-free.
 
 ## File structure
@@ -926,6 +926,7 @@ Create `VendorCardSerializationTest.java`:
 package com.rapid7.integrationregistry.controller.dto;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
@@ -980,13 +981,16 @@ class VendorCardSerializationTest {
   }
 
   @Test
-  void flatCard_shouldRenderNullLastUpdatedAsExplicitNull() throws Exception {
-    var dto =
-        new VendorServiceCardDto(
-            "jira", "Jira", "atlassian", "Atlassian", "itsm", 0,
-            List.of(), List.of(), HealthState.HEALTHY, null);
-    var json = flat.write(dto).getJson();
-    assertThat(json).contains("\"last_updated\":null");
+  void flatCard_shouldRequireNonNullLastUpdated() {
+    // last_updated is required + non-null per openapi.json — the compact
+    // constructor rejects null rather than letting it reach the wire.
+    assertThatNullPointerException()
+        .isThrownBy(
+            () ->
+                new VendorServiceCardDto(
+                    "jira", "Jira", "atlassian", "Atlassian", "itsm", 0,
+                    List.of(), List.of(), HealthState.HEALTHY, null))
+        .withMessage(VendorServiceCardDto.FIELD_LAST_UPDATED);
   }
 }
 ```
