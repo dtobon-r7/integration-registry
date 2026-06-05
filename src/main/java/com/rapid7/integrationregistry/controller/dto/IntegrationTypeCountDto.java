@@ -19,22 +19,8 @@ public record IntegrationTypeCountDto(String integrationType, int total, int err
 
   public IntegrationTypeCountDto {
     Objects.requireNonNull(integrationType, FIELD_INTEGRATION_TYPE);
-    if (total < 0) {
-      throw new IllegalArgumentException(FIELD_TOTAL + " must be >= 0: " + total);
-    }
-    if (errorCount < 0) {
-      throw new IllegalArgumentException(FIELD_ERROR_COUNT + " must be >= 0: " + errorCount);
-    }
-    if (errorCount > total) {
-      throw new IllegalArgumentException(
-          FIELD_ERROR_COUNT
-              + " ("
-              + errorCount
-              + ") must be <= "
-              + FIELD_TOTAL
-              + " ("
-              + total
-              + ")");
-    }
+    DtoValidations.requireNonNegative(total, FIELD_TOTAL);
+    DtoValidations.requireNonNegative(errorCount, FIELD_ERROR_COUNT);
+    DtoValidations.requireAtMost(errorCount, total, FIELD_ERROR_COUNT, FIELD_TOTAL);
   }
 }

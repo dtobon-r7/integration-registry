@@ -14,7 +14,8 @@ import tools.jackson.databind.annotation.JsonNaming;
  * VendorCategory enum values — assembly (Plan 02) must supply contract-valid values. {@code
  * lastUpdated} is required (non-null) per the openapi.json contract; the aggregator projection
  * records may carry a null internally, so assembly (Plan 02) must supply a non-null value (e.g.
- * falling back to the response's {@code as_of}) before constructing this DTO.
+ * falling back to the response's {@code as_of}) before constructing this DTO. Enforces the contract
+ * invariant {@code integrationsConnected == sum(integrationTypeCounts[].total)}.
  */
 @SuppressWarnings("PMD.ExcessiveParameterList")
 // 10 fields dictated by the openapi.json VendorServiceCard wire contract, not by ergonomics.
@@ -52,11 +53,10 @@ public record VendorServiceCardDto(
     Objects.requireNonNull(productsConnected, FIELD_PRODUCTS_CONNECTED);
     Objects.requireNonNull(aggregateHealth, FIELD_AGGREGATE_HEALTH);
     Objects.requireNonNull(lastUpdated, FIELD_LAST_UPDATED);
-    if (integrationsConnected < 0) {
-      throw new IllegalArgumentException(
-          FIELD_INTEGRATIONS_CONNECTED + " must be >= 0: " + integrationsConnected);
-    }
+    DtoValidations.requireNonNegative(integrationsConnected, FIELD_INTEGRATIONS_CONNECTED);
     integrationTypeCounts = List.copyOf(integrationTypeCounts);
     productsConnected = List.copyOf(productsConnected);
+    DtoValidations.requireConnectedEqualsTypeCountTotals(
+        integrationsConnected, integrationTypeCounts, FIELD_INTEGRATIONS_CONNECTED);
   }
 }

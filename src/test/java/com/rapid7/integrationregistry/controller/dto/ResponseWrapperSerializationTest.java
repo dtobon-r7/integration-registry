@@ -2,7 +2,6 @@ package com.rapid7.integrationregistry.controller.dto;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -17,7 +16,6 @@ class ResponseWrapperSerializationTest {
   @Autowired private JacksonTester<VendorServiceDetailResponse> detail;
   @Autowired private JacksonTester<VendorsResponse> vendors;
   @Autowired private JacksonTester<VendorDetailResponse> vendorDetail;
-  private final ObjectMapper mapper = new ObjectMapper();
 
   private ResponseMetadataDto meta() {
     return new ResponseMetadataDto(true, Instant.parse("2026-04-23T10:00:00Z"), "v1.42.0");
@@ -44,7 +42,7 @@ class ResponseWrapperSerializationTest {
     assertThat(json).contains("\"vendor_services\":[");
     assertThat(json).contains("\"unavailable_products\":[]");
     assertThat(json).contains("\"metadata\":{");
-    assertThat(OpenApiSchemas.validate("VendorServicesResponse", mapper.readTree(json))).isEmpty();
+    assertThat(OpenApiSchemas.validate("VendorServicesResponse", json)).isEmpty();
   }
 
   @Test
@@ -72,8 +70,7 @@ class ResponseWrapperSerializationTest {
             meta());
     var json = detail.write(dto).getJson();
     assertThat(json).contains("\"data_sources\":[");
-    assertThat(OpenApiSchemas.validate("VendorServiceDetailResponse", mapper.readTree(json)))
-        .isEmpty();
+    assertThat(OpenApiSchemas.validate("VendorServiceDetailResponse", json)).isEmpty();
   }
 
   @Test
@@ -83,7 +80,7 @@ class ResponseWrapperSerializationTest {
             List.of(new VendorListEntryDto("microsoft", "Microsoft", 2)), List.of(), meta());
     var json = vendors.write(dto).getJson();
     assertThat(json).contains("\"vendors\":[");
-    assertThat(OpenApiSchemas.validate("VendorsResponse", mapper.readTree(json))).isEmpty();
+    assertThat(OpenApiSchemas.validate("VendorsResponse", json)).isEmpty();
   }
 
   @Test
@@ -112,7 +109,7 @@ class ResponseWrapperSerializationTest {
     // Nested card omits vendor_id/vendor_name: its first key is vendor_service_id, not vendor_id.
     assertThat(json).contains("\"vendor_services\":[{\"vendor_service_id\":");
     assertThat(json).doesNotContain("\"vendor_services\":[{\"vendor_id\":");
-    assertThat(OpenApiSchemas.validate("VendorDetailResponse", mapper.readTree(json))).isEmpty();
+    assertThat(OpenApiSchemas.validate("VendorDetailResponse", json)).isEmpty();
   }
 
   @Test
@@ -126,6 +123,6 @@ class ResponseWrapperSerializationTest {
     var json = vendorServices.write(dto).getJson();
     assertThat(json).contains("\"vendor_services\":[]");
     assertThat(json).contains("\"unavailable_products\":[{");
-    assertThat(OpenApiSchemas.validate("VendorServicesResponse", mapper.readTree(json))).isEmpty();
+    assertThat(OpenApiSchemas.validate("VendorServicesResponse", json)).isEmpty();
   }
 }

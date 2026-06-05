@@ -2,7 +2,6 @@ package com.rapid7.integrationregistry.controller.dto;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,14 +14,13 @@ class SupportingTypesSerializationTest {
   @Autowired private JacksonTester<IntegrationTypeCountDto> typeCount;
   @Autowired private JacksonTester<ResponseMetadataDto> metadata;
   @Autowired private JacksonTester<ErrorEnvelopeDto> error;
-  private final ObjectMapper mapper = new ObjectMapper();
 
   @Test
   void integrationTypeCount_shouldMatchContractSchema() throws Exception {
     var json = typeCount.write(new IntegrationTypeCountDto("SIEM Event Source", 4, 1)).getJson();
     assertThat(json).contains("\"integration_type\":\"SIEM Event Source\"");
     assertThat(json).contains("\"error_count\":1");
-    assertThat(OpenApiSchemas.validate("IntegrationTypeCount", mapper.readTree(json))).isEmpty();
+    assertThat(OpenApiSchemas.validate("IntegrationTypeCount", json)).isEmpty();
   }
 
   @Test
@@ -32,7 +30,7 @@ class SupportingTypesSerializationTest {
     assertThat(json).contains("\"cache_hit\":true");
     assertThat(json).contains("\"as_of\":\"2026-04-23T10:00:00Z\"");
     assertThat(json).contains("\"mapping_version\":\"v1.42.0\"");
-    assertThat(OpenApiSchemas.validate("ResponseMetadata", mapper.readTree(json))).isEmpty();
+    assertThat(OpenApiSchemas.validate("ResponseMetadata", json)).isEmpty();
   }
 
   @Test
@@ -44,6 +42,6 @@ class SupportingTypesSerializationTest {
     var json = error.write(dto).getJson();
     assertThat(json).contains("\"error\":{");
     assertThat(json).contains("\"code\":\"NOT_FOUND\"");
-    assertThat(OpenApiSchemas.validate("ErrorEnvelope", mapper.readTree(json))).isEmpty();
+    assertThat(OpenApiSchemas.validate("ErrorEnvelope", json)).isEmpty();
   }
 }

@@ -15,9 +15,6 @@ public record VendorListEntryDto(String vendorId, String vendorName, int vendorS
   public VendorListEntryDto {
     Objects.requireNonNull(vendorId, FIELD_VENDOR_ID);
     Objects.requireNonNull(vendorName, FIELD_VENDOR_NAME);
-    if (vendorServicesCount < 0) {
-      throw new IllegalArgumentException(
-          FIELD_VENDOR_SERVICES_COUNT + " must be >= 0: " + vendorServicesCount);
-    }
+    DtoValidations.requireNonNegative(vendorServicesCount, FIELD_VENDOR_SERVICES_COUNT);
   }
 }

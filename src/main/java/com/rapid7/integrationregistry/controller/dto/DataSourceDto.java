@@ -37,21 +37,9 @@ public record DataSourceDto(
     Objects.requireNonNull(productName, FIELD_PRODUCT_NAME);
     Objects.requireNonNull(status, FIELD_STATUS);
     Objects.requireNonNull(integrations, FIELD_INTEGRATIONS);
-    if (integrationsCount < 0) {
-      throw new IllegalArgumentException(
-          FIELD_INTEGRATIONS_COUNT + " must be >= 0: " + integrationsCount);
-    }
-    if (integrationsCount != integrations.size()) {
-      throw new IllegalArgumentException(
-          FIELD_INTEGRATIONS_COUNT
-              + " ("
-              + integrationsCount
-              + ") must equal "
-              + FIELD_INTEGRATIONS
-              + ".size() ("
-              + integrations.size()
-              + ")");
-    }
+    DtoValidations.requireNonNegative(integrationsCount, FIELD_INTEGRATIONS_COUNT);
+    DtoValidations.requireCountMatchesSize(
+        integrationsCount, integrations, FIELD_INTEGRATIONS_COUNT, FIELD_INTEGRATIONS);
     integrations = List.copyOf(integrations);
   }
 }
