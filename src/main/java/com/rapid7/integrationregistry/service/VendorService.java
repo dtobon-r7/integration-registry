@@ -1,0 +1,163 @@
+package com.rapid7.integrationregistry.service;
+
+import com.rapid7.integrationregistry.adapter.IntegrationStatus;
+import com.rapid7.integrationregistry.adapter.NormalizedIntegration;
+import com.rapid7.integrationregistry.aggregator.VendorAggregator;
+import com.rapid7.integrationregistry.aggregator.projection.VendorCard;
+import com.rapid7.integrationregistry.aggregator.projection.VendorServiceCard;
+import com.rapid7.integrationregistry.auth.OutboundAuth;
+import com.rapid7.integrationregistry.controller.dto.HealthState;
+import com.rapid7.integrationregistry.controller.dto.IntegrationTypeCountDto;
+import com.rapid7.integrationregistry.controller.dto.ResponseMetadataDto;
+import com.rapid7.integrationregistry.controller.dto.UnavailableProductDto;
+import com.rapid7.integrationregistry.controller.dto.UnavailableReason;
+import com.rapid7.integrationregistry.controller.dto.VendorListEntryDto;
+import com.rapid7.integrationregistry.controller.dto.VendorServiceCardDto;
+import com.rapid7.integrationregistry.controller.dto.VendorServicesResponse;
+import com.rapid7.integrationregistry.controller.dto.VendorsResponse;
+import com.rapid7.integrationregistry.coordinator.FanOutCoordinator;
+import com.rapid7.integrationregistry.coordinator.ProductOutcome;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import org.springframework.stereotype.Service;
+
+/**
+ * Read-path orchestration brain (RFC-001 §Spring layer boundaries — "knows no HTTP"). One entry
+ * point per route: delegate to {@link FanOutCoordinator}, unwrap successful {@link
+ * ProductOutcome.Served} integrations, hand them to {@link VendorAggregator} with the route's
+ * projection, then assemble the Plan-01 response DTO including the shared {@code metadata} block
+ * and {@code unavailable_products[]} envelope. Holds the honesty invariants: {@code as_of} is the
+ * oldest contributing fetch, {@code cache_hit} requires every product fresh, and 404 is asserted
+ * only when fresh and stale both confirm emptiness.
+ */
+@Service
+public class VendorService {
+
+  private final FanOutCoordinator coordinator;
+  private final VendorAggregator aggregator;
+  private final Clock clock;
+
+  public VendorService(FanOutCoordinator coordinator, VendorAggregator aggregator, Clock clock) {
+    this.coordinator = Objects.requireNonNull(coordinator, "coordinator");
+    this.aggregator = Objects.requireNonNull(aggregator, "aggregator");
+    this.clock = Objects.requireNonNull(clock, "clock");
+  }
+
+  public VendorServicesResponse listVendorServices(String orgId, OutboundAuth auth) {
+    List<ProductOutcome> outcomes = coordinator.fetchAll(orgId, auth);
+    ResponseMetadataDto metadata = metadata(outcomes);
+    List<UnavailableProductDto> unavailable = unavailableProducts(outcomes);
+    List<VendorServiceCard> cards = aggregator.toVendorServiceCards(contributing(outcomes));
+    List<VendorServiceCardDto> dtos = new ArrayList<>(cards.size());
+    for (VendorServiceCard card : cards) {
+      dtos.add(toCardDto(card, metadata.asOf()));
+    }
+    return new VendorServicesResponse(dtos, unavailable, metadata);
+  }
+
+  public VendorsResponse listVendors(String orgId, OutboundAuth auth) {
+    List<ProductOutcome> outcomes = coordinator.fetchAll(orgId, auth);
+    ResponseMetadataDto metadata = metadata(outcomes);
+    List<UnavailableProductDto> unavailable = unavailableProducts(outcomes);
+    List<VendorCard> cards = aggregator.toVendorCards(contributing(outcomes));
+    List<VendorListEntryDto> dtos = new ArrayList<>(cards.size());
+    for (VendorCard card : cards) {
+      dtos.add(
+          new VendorListEntryDto(card.vendorId(), card.vendorName(), card.vendorServicesCount()));
+    }
+    return new VendorsResponse(dtos, unavailable, metadata);
+  }
+
+  // ----- shared spine -----
+
+  /** Flatten every Served outcome's integrations (stale serves still contribute to the grid). */
+  private static List<NormalizedIntegration> contributing(List<ProductOutcome> outcomes) {
+    List<NormalizedIntegration> all = new ArrayList<>();
+    for (ProductOutcome o : outcomes) {
+      if (o instanceof ProductOutcome.Served served) {
+        all.addAll(served.integrations());
+      }
+    }
+    return all;
+  }
+
+  private ResponseMetadataDto metadata(List<ProductOutcome> outcomes) {
+    boolean cacheHit = !outcomes.isEmpty();
+    Instant oldest = null;
+    for (ProductOutcome o : outcomes) {
+      if (o instanceof ProductOutcome.Served served) {
+        if (!(served.cacheHitPerProduct() && !served.stale())) {
+          cacheHit = false;
+        }
+        if (oldest == null || served.fetchedAt().isBefore(oldest)) {
+          oldest = served.fetchedAt();
+        }
+      } else {
+        cacheHit = false;
+      }
+    }
+    Instant asOf = (oldest != null) ? oldest : clock.instant();
+    return new ResponseMetadataDto(cacheHit, asOf, aggregator.mappingVersion());
+  }
+
+  private static List<UnavailableProductDto> unavailableProducts(List<ProductOutcome> outcomes) {
+    List<UnavailableProductDto> out = new ArrayList<>();
+    for (ProductOutcome o : outcomes) {
+      if (o instanceof ProductOutcome.Unavailable u) {
+        out.add(new UnavailableProductDto(u.productName(), false, reasonOf(u.reason()), null));
+      } else if (o instanceof ProductOutcome.Served served && served.stale()) {
+        out.add(
+            new UnavailableProductDto(
+                served.productName(),
+                true,
+                reasonOf(served.staleReason().orElseThrow()),
+                served.staleSince().orElseThrow()));
+      }
+    }
+    return out;
+  }
+
+  // ----- translation -----
+
+  static UnavailableReason reasonOf(String wire) {
+    for (UnavailableReason r : UnavailableReason.values()) {
+      if (r.wire().equals(wire)) {
+        return r;
+      }
+    }
+    throw new IllegalStateException("Unknown unavailable reason from coordinator: " + wire);
+  }
+
+  static HealthState healthOf(IntegrationStatus status) {
+    return switch (status) {
+      case HEALTHY -> HealthState.HEALTHY;
+      case WARNING -> HealthState.WARNING;
+      case ERROR -> HealthState.ERROR;
+      case MISSING_DATA -> HealthState.MISSING_DATA;
+      case DISABLED -> HealthState.DISABLED;
+    };
+  }
+
+  private VendorServiceCardDto toCardDto(VendorServiceCard card, Instant asOf) {
+    List<IntegrationTypeCountDto> typeCounts = new ArrayList<>(card.integrationTypeCounts().size());
+    card.integrationTypeCounts()
+        .forEach(
+            c ->
+                typeCounts.add(
+                    new IntegrationTypeCountDto(c.integrationType(), c.total(), c.errorCount())));
+    return new VendorServiceCardDto(
+        card.vendorServiceId(),
+        card.vendorServiceName(),
+        card.vendorId(),
+        card.vendorName(),
+        aggregator.wireCategoryOf(card),
+        card.integrationsConnected(),
+        typeCounts,
+        card.productsConnected(),
+        healthOf(card.aggregateHealth()),
+        card.lastUpdated() != null ? card.lastUpdated() : asOf);
+  }
+}
