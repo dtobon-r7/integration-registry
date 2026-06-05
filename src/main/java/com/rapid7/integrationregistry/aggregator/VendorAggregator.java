@@ -11,6 +11,7 @@ import com.rapid7.integrationregistry.aggregator.projection.VendorServiceCard;
 import com.rapid7.integrationregistry.aggregator.projection.VendorServiceDetail;
 import com.rapid7.integrationregistry.mapping.ProductName;
 import com.rapid7.integrationregistry.mapping.SourceType;
+import com.rapid7.integrationregistry.mapping.VendorCategory;
 import com.rapid7.integrationregistry.mapping.VendorMappingSnapshot;
 import com.rapid7.integrationregistry.mapping.VendorResolution;
 import java.time.Instant;
@@ -152,6 +153,42 @@ public final class VendorAggregator {
     }
     Set<String> warnedConflicts = new HashSet<>();
     return Optional.of(buildVendorServiceDetail(scoped, warnedConflicts));
+  }
+
+  // ----- T09 pass-throughs -----
+
+  /**
+   * The {@code metadata.mapping_version} of the loaded bundle, surfaced for T09's response assembly
+   * so the service layer never has to depend on {@code ..mapping..} (ArchUnit-forbidden).
+   */
+  public String mappingVersion() {
+    return snapshot.mappingVersion();
+  }
+
+  /**
+   * Translate a projection's internal {@link VendorCategory} to a contract-valid openapi
+   * VendorCategory wire value. Exists so the service layer can populate the wire DTO without naming
+   * {@link VendorCategory} (ArchUnit-forbidden). The internal enum and the wire enum have
+   * mismatched value sets; non-overlapping internal values fold to the wire's {@code other}
+   * fallback, except {@code cloud_provider} which maps to the wire's {@code cloud}.
+   */
+  public String wireCategoryOf(VendorServiceCard card) {
+    return toWireCategory(card.vendorCategory());
+  }
+
+  /** See {@link #wireCategoryOf(VendorServiceCard)}. */
+  public String wireCategoryOf(VendorServiceDetail detail) {
+    return toWireCategory(detail.vendorCategory());
+  }
+
+  private static String toWireCategory(VendorCategory category) {
+    return switch (category) {
+      case EDR -> "edr";
+      case SIEM -> "siem";
+      case ITSM -> "itsm";
+      case CLOUD_PROVIDER -> "cloud";
+      case IDENTITY, NOTIFICATION, OTHER -> "other";
+    };
   }
 
   // ----- resolution pass -----
