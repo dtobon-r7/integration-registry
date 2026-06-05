@@ -45,13 +45,12 @@ import org.springframework.stereotype.Service;
  */
 // CouplingBetweenObjects + TooManyMethods: this class is the read-path assembly point for all four
 // routes. By design it touches every Plan-01 response DTO, its nested DTOs, and the aggregator
-// projection records it maps from — the coupling and method count are inherent to "assemble the
-// wire
-// contract from projections", not accidental. One assembly helper per response shape (list/detail x
-// vendor/vendor-service) plus the shared spine pushes both metrics past the project thresholds.
-// Splitting the assembly across helper classes would only relocate the same fan-in. Suppressed
-// locally and justified rather than weakening the project-wide thresholds, mirroring the existing
-// precedent on FanOutCoordinator and VendorAggregator.
+// projection records it maps from — the coupling and method count are inherent to assembling the
+// wire contract from projections, not accidental. One assembly helper per response shape
+// (list/detail x vendor/vendor-service) plus the shared spine pushes both metrics past the project
+// thresholds. Splitting the assembly across helper classes would only relocate the same fan-in.
+// Suppressed locally and justified rather than weakening the project-wide thresholds, mirroring the
+// existing precedent on FanOutCoordinator and VendorAggregator.
 @SuppressWarnings({"PMD.CouplingBetweenObjects", "PMD.TooManyMethods"})
 @Service
 public class VendorService {
@@ -105,6 +104,8 @@ public class VendorService {
   }
 
   private ResponseMetadataDto metadata(List<ProductOutcome> outcomes) {
+    // cache_hit: non-empty AND every product a fresh-tier Served (spec §metadata); the loop seeds
+    // true-unless-empty then knocks it down on any stale, fetched, or Unavailable outcome.
     boolean cacheHit = !outcomes.isEmpty();
     Instant oldest = null;
     for (ProductOutcome o : outcomes) {
@@ -129,6 +130,7 @@ public class VendorService {
       if (o instanceof ProductOutcome.Unavailable u) {
         out.add(new UnavailableProductDto(u.productName(), false, reasonOf(u.reason()), null));
       } else if (o instanceof ProductOutcome.Served served && served.stale()) {
+        // stale ⇒ staleReason and staleSince both present, by the ProductOutcome.Served invariant.
         out.add(
             new UnavailableProductDto(
                 served.productName(),
