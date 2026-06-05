@@ -63,13 +63,17 @@
 			<artifactId>json-schema-validator</artifactId>
 			<version>1.5.4</version>
 		</dependency>
+		<!--
+			Jackson 3 (tools.jackson) is the only Jackson our own source uses. YAML parsing for the
+			vendor-mapping bundle (mapping.BundleParser) needs the Jackson 3 YAML dataformat; java.time
+			support is bundled in jackson-databind 3 (JSR-310 was merged), so no datatype module is
+			needed. The Jackson 2 (com.fasterxml) databind still on the classpath arrives only as an
+			encapsulated transitive of com.networknt:json-schema-validator and is not referenced by our
+			code. Version is managed by the Spring Boot 4 dependency BOM.
+		-->
 		<dependency>
-			<groupId>com.fasterxml.jackson.dataformat</groupId>
+			<groupId>tools.jackson.dataformat</groupId>
 			<artifactId>jackson-dataformat-yaml</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>com.fasterxml.jackson.datatype</groupId>
-			<artifactId>jackson-datatype-jsr310</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>software.amazon.awssdk</groupId>

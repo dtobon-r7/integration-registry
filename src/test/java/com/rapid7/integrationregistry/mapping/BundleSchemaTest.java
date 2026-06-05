@@ -2,6 +2,7 @@ package com.rapid7.integrationregistry.mapping;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.networknt.schema.InputFormat;
 import com.networknt.schema.JsonSchema;
 import com.networknt.schema.ValidationMessage;
 import java.io.IOException;
@@ -19,7 +20,7 @@ class BundleSchemaTest {
   }
 
   private Set<ValidationMessage> validateFixture(String fixtureFileName) throws IOException {
-    return schema.validate(BundleSchemaResources.readFixture(fixtureFileName));
+    return schema.validate(BundleSchemaResources.readFixture(fixtureFileName), InputFormat.JSON);
   }
 
   // ---------- Positive cases ----------
