@@ -46,9 +46,12 @@ class VendorControllerTest {
 
   private static final String ORG = "org-123";
   private static final String USER = "user-456";
-  // Bind to the controller's own constants (same package) so a header-name change can't pass here.
-  private static final String ORG_ID_HEADER = VendorController.ORG_ID_HEADER;
-  private static final String USER_ID_HEADER = VendorController.USER_ID_HEADER;
+  // Hard-coded literals (NOT VendorController's constants) so these tests lock the external wire
+  // contract: X-IPIMS-* is injected by Kong and pinned in openapi.json. Referencing the controller
+  // constant would let a contract-breaking rename of its value track silently and still pass; with
+  // the literal, the controller would then require a header the test never sends -> 400 -> fail.
+  private static final String ORG_ID_HEADER = "X-IPIMS-ORG-ID";
+  private static final String USER_ID_HEADER = "X-IPIMS-USER-ID";
 
   @Autowired private MockMvc mockMvc;
   @MockitoBean private VendorService vendorService;
