@@ -16,6 +16,12 @@ import org.springframework.http.HttpHeaders;
  * be null there and fail boot. {@code fetch} delegates to a per-test-settable {@link Behavior};
  * tests call {@link #willReturn}/{@link #willThrow}/{@link #reset} between scenarios. Tracks an
  * invocation count so a test can assert a fresh cache hit skipped the adapter call.
+ *
+ * <p>Distinct from {@code CoordinatorAdapterFixtures.CountingAdapter} (the coordinator-package
+ * double) because this one is <em>mutable across scenarios</em>: it lives as a long-lived singleton
+ * bean in a cached {@code @SpringBootTest} context, so its behavior is reconfigured per test rather
+ * than fixed at construction. That mutability — not the hard-coded {@code productName} — is why a
+ * separate double exists.
  */
 final class StubAdapter implements IntegrationAdapter {
 

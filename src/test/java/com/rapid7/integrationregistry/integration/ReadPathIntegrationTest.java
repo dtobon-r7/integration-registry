@@ -27,7 +27,7 @@ class ReadPathIntegrationTest extends ReadPathTestSupport {
   @Autowired private FanOutCoordinator coordinator;
 
   @Test
-  void contextBoots_withExactlyTwoStubAdapters() {
+  void context_shouldWireExactlyTwoStubAdapters_whenBooted() {
     // Arrange — context booted via @SpringBootTest; nothing per-test needed.
 
     // Act — both stub adapters are injected and the coordinator wired.
@@ -39,7 +39,7 @@ class ReadPathIntegrationTest extends ReadPathTestSupport {
   }
 
   @Test
-  void vendorServices_cacheHit_returnsCacheHitTrue_andSkipsAdapters() {
+  void listVendorServices_shouldReturnCacheHitTrueAndSkipAdapters_whenAllProductsFresh() {
     // Arrange — both products pre-seeded fresh; adapters left unconfigured (must not be called).
     Instant idrFetchedAt = Instant.parse("2026-06-01T09:00:00Z");
     Instant iconFetchedAt = Instant.parse("2026-06-01T10:00:00Z");
@@ -76,7 +76,7 @@ class ReadPathIntegrationTest extends ReadPathTestSupport {
   }
 
   @Test
-  void vendorServices_cacheMiss_fetchesBoth_andReportsCacheHitFalse() {
+  void listVendorServices_shouldFetchBothAndReportCacheHitFalse_whenCacheEmpty() {
     // Arrange — empty cache (flushed in @BeforeEach); both adapters return data.
     Instant fetchedAt = Instant.parse("2026-06-02T08:00:00Z");
     insightIdrAdapter.willReturn(
@@ -107,7 +107,7 @@ class ReadPathIntegrationTest extends ReadPathTestSupport {
   }
 
   @Test
-  void vendorServices_partialWithStale_servesStale_andReportsStaleUnavailable() {
+  void listVendorServices_shouldServeStaleAndReportStaleUnavailable_whenProductTransientlyFails() {
     // Arrange — IDR: stale-only + transient failure => coordinator serves stale.
     Instant staleFetchedAt = Instant.parse("2026-05-30T06:00:00Z");
     Instant iconFetchedAt = Instant.parse("2026-06-02T08:00:00Z");
@@ -148,7 +148,8 @@ class ReadPathIntegrationTest extends ReadPathTestSupport {
   }
 
   @Test
-  void vendorServices_partialWithOmission_omitsProduct_andReportsReason() {
+  void
+      listVendorServices_shouldOmitProductAndReportReason_whenProductPermanentlyFailsWithNoStale() {
     // Arrange — IDR: no stale + permanent auth failure => omitted entirely; ICON returns data.
     Instant fetchedAt = Instant.parse("2026-06-02T08:00:00Z");
     insightIdrAdapter.willThrow(new AdapterAuthException("401 from IDR"));
@@ -177,7 +178,7 @@ class ReadPathIntegrationTest extends ReadPathTestSupport {
   }
 
   @Test
-  void vendorServices_allAdaptersFail_returns200_withEmptyArray_andOneEntryPerProduct() {
+  void listVendorServices_shouldReturn200WithEmptyArrayAndOneEntryPerProduct_whenAllAdaptersFail() {
     // Arrange — both throw, no stale anywhere.
     insightIdrAdapter.willThrow(new AdapterUpstreamException("503 from IDR"));
     insightConnectAdapter.willThrow(new AdapterUpstreamException("503 from ICON"));
@@ -200,7 +201,7 @@ class ReadPathIntegrationTest extends ReadPathTestSupport {
   }
 
   @Test
-  void vendorDetail_multiService_returnsNestedProjection_withRollups() {
+  void getVendorDetail_shouldReturnNestedProjectionWithRollups_whenVendorHasMultipleServices() {
     // Arrange — IDR contributes to both MS services; ICON also contributes to both. A WARNING on
     // the IDR sentinel instance makes the rollups observably non-trivial: the sentinel service is
     // worst-of(WARNING, HEALTHY)=WARNING, defender stays HEALTHY, and the vendor rolls up to
