@@ -42,6 +42,18 @@
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!--
+			Spring Boot 4 modularized the test-slice autoconfigurations: @WebMvcTest moved out of
+			spring-boot-test-autoconfigure into its own spring-boot-webmvc-test module (package
+			org.springframework.boot.webmvc.test.autoconfigure). VendorControllerTest is the first
+			@WebMvcTest slice in this service, so the module is declared here explicitly. Version is
+			managed by the Spring Boot 4 dependency BOM.
+		-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-webmvc-test</artifactId>
+			<scope>test</scope>
+		</dependency>
 		<dependency>
 			<groupId>com.tngtech.archunit</groupId>
 			<artifactId>archunit-junit5</artifactId>
