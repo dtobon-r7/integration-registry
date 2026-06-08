@@ -8,8 +8,7 @@ import com.rapid7.integrationregistry.adapter.IntegrationStatus;
 import com.rapid7.integrationregistry.adapter.NormalizedIntegration;
 import com.rapid7.integrationregistry.adapter.SourceIdentifier;
 import com.rapid7.integrationregistry.adapter.insightconnect.InsightConnectAdapter;
-import com.rapid7.integrationregistry.cache.CacheKey;
-import com.rapid7.integrationregistry.cache.CacheTier;
+import com.rapid7.integrationregistry.cache.CacheTestSupport;
 import com.rapid7.integrationregistry.cache.IntegrationCache;
 import com.rapid7.integrationregistry.testsupport.BundleArchiveBuilder;
 import java.io.IOException;
@@ -195,6 +194,6 @@ abstract class ReadPathTestSupport
   /** Seed ONLY the stale tier: write both, then delete the fresh key (mirrors expiry). */
   protected void seedStaleOnly(String product, FetchResult result) {
     cache.writeOnSuccess(ORG, product, result);
-    redis.delete(CacheKey.of(CacheTier.FRESH, ORG, product));
+    CacheTestSupport.evictFresh(redis, ORG, product);
   }
 }
