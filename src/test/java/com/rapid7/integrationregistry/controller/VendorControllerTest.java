@@ -167,7 +167,7 @@ class VendorControllerTest {
   }
 
   @Test
-  void vendorServiceDetail_emptyPayloadWithUnavailable_returns200NotFound() throws Exception {
+  void vendorServiceDetail_emptyPayloadWithUnavailable_returns200Not404() throws Exception {
     // Present Optional with empty data_sources + populated unavailable_products: partial
     // unavailability, MUST be 200, NOT 404. The controller passes the present result through.
     VendorServiceDetailResponse partial =

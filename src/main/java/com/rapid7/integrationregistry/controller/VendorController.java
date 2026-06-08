@@ -35,6 +35,9 @@ public class VendorController {
   static final String ORG_ID_HEADER = "X-IPIMS-ORG-ID";
   static final String USER_ID_HEADER = "X-IPIMS-USER-ID";
 
+  private static final String NOT_FOUND_VENDOR_SERVICE = "Vendor service not found in this org";
+  private static final String NOT_FOUND_VENDOR = "Vendor not found in this org";
+
   private final VendorService vendorService;
 
   public VendorController(VendorService vendorService) {
@@ -54,7 +57,7 @@ public class VendorController {
       @RequestHeader(USER_ID_HEADER) String userId) {
     return vendorService
         .getVendorServiceDetail(orgId, vendorServiceId, auth(orgId, userId))
-        .orElseThrow(() -> new ResourceNotFoundException("Vendor service not found in this org"));
+        .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND_VENDOR_SERVICE));
   }
 
   @GetMapping("/vendors")
@@ -70,7 +73,7 @@ public class VendorController {
       @RequestHeader(USER_ID_HEADER) String userId) {
     return vendorService
         .getVendorDetail(orgId, vendorId, auth(orgId, userId))
-        .orElseThrow(() -> new ResourceNotFoundException("Vendor not found in this org"));
+        .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND_VENDOR));
   }
 
   /** Carry the validated identity headers downstream for the outbound Class 3 forward (T10). */
