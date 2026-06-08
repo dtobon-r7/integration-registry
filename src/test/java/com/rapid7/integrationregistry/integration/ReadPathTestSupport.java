@@ -7,7 +7,6 @@ import com.rapid7.integrationregistry.adapter.IntegrationAdapter;
 import com.rapid7.integrationregistry.adapter.IntegrationStatus;
 import com.rapid7.integrationregistry.adapter.NormalizedIntegration;
 import com.rapid7.integrationregistry.adapter.SourceIdentifier;
-import com.rapid7.integrationregistry.adapter.insightconnect.InsightConnectAdapter;
 import com.rapid7.integrationregistry.cache.CacheTestSupport;
 import com.rapid7.integrationregistry.cache.IntegrationCache;
 import com.rapid7.integrationregistry.testsupport.BundleArchiveBuilder;
@@ -17,13 +16,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.context.annotation.Bean;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -39,11 +37,12 @@ import software.amazon.awssdk.services.s3.S3Client;
  * vendor-mapping bundle is staged on disk so the bundle loader resolves the seeded vendor services
  * without S3.
  */
-// @Import is required because StubAdapterConfig is a nested @TestConfiguration of this abstract
-// base, not of the concrete test class Spring bootstraps — Boot auto-detects nested test config
-// only on the run test class itself, so an inherited nested config must be imported explicitly.
+// StubAdapterConfig is a top-level @TestConfiguration imported explicitly here. Keeping it
+// top-level (rather than a nested static class) means Boot's nested-default-config detection
+// never sees it ambiguously, so the Spring 7.1 "these classes ... will no longer be ignored"
+// deprecation does not apply — the stub config reaches the context solely via this @Import.
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@org.springframework.context.annotation.Import(ReadPathTestSupport.StubAdapterConfig.class)
+@org.springframework.context.annotation.Import(StubAdapterConfig.class)
 @org.springframework.boot.test.context.filter.annotation.TypeExcludeFilters(
     ReadPathTestSupport.ExcludeRealAdapters.class)
 abstract class ReadPathTestSupport
@@ -59,26 +58,6 @@ abstract class ReadPathTestSupport
   private static Path cacheDir;
 
   /**
-   * Supplies exactly the two stub adapters the coordinator autowires. The real {@code
-   * InsightConnectAdapter} @Component is removed from the scan by {@link ExcludeRealAdapters} (see
-   * fallback note there), so these two beans are the only {@code IntegrationAdapter}s in the
-   * context. Both have hard-coded product names, so the coordinator's constructor-time validation
-   * passes at boot with exactly {@code InsightConnect} + {@code InsightIDR}.
-   */
-  @TestConfiguration
-  static class StubAdapterConfig {
-    @Bean
-    StubAdapter insightConnectAdapter() {
-      return new StubAdapter(INSIGHT_CONNECT);
-    }
-
-    @Bean
-    StubAdapter insightIdrAdapter() {
-      return new StubAdapter(INSIGHT_IDR);
-    }
-  }
-
-  /**
    * Documented fallback (WP-04 plan): bean-name override did NOT evict the scanned {@code
    * InsightConnectAdapter} — under Spring Boot 4, the {@code @Import}-ed stub @Bean and the
    * scanned @Component collide during configuration-class post-processing and Boot rejects the
@@ -92,13 +71,36 @@ abstract class ReadPathTestSupport
    */
   static final class ExcludeRealAdapters
       extends org.springframework.boot.context.TypeExcludeFilter {
+
+    private static final String ADAPTER_INTERFACE = IntegrationAdapter.class.getName();
+    private static final String MAIN_ADAPTER_PACKAGE_PREFIX =
+        "com.rapid7.integrationregistry.adapter.";
+
+    // Broadened rule (was a single hard-coded InsightConnectAdapter FQN): exclude ANY class in the
+    // main adapter package that DECLARES IntegrationAdapter as a direct interface, so a future real
+    // adapter @Component (e.g. an InsightIDRAdapter) won't collide with the stub beans. This is
+    // metadata-only by necessity — a TypeExcludeFilter sees a MetadataReader, never a loaded Class,
+    // so only DIRECTLY declared interfaces are visible (no transitive walk). InsightConnectAdapter
+    // declares `implements IntegrationAdapter` directly, so getInterfaceNames() carries the FQN and
+    // this is sufficient today. CAUTION: an adapter that gets the interface only via an abstract
+    // base (rather than declaring it itself) would not be matched here and would need its base, or
+    // itself, named explicitly. The package guard keeps the test stubs (in this `integration` test
+    // package, and never component-scanned by the app anyway) out of scope.
     @Override
     public boolean match(
         org.springframework.core.type.classreading.MetadataReader metadataReader,
         org.springframework.core.type.classreading.MetadataReaderFactory metadataReaderFactory) {
-      return InsightConnectAdapter.class
-          .getName()
-          .equals(metadataReader.getClassMetadata().getClassName());
+      org.springframework.core.type.ClassMetadata classMetadata = metadataReader.getClassMetadata();
+      String className = classMetadata.getClassName();
+      if (!className.startsWith(MAIN_ADAPTER_PACKAGE_PREFIX)) {
+        return false;
+      }
+      for (String iface : classMetadata.getInterfaceNames()) {
+        if (ADAPTER_INTERFACE.equals(iface)) {
+          return true;
+        }
+      }
+      return false;
     }
 
     // TypeExcludeFilter is held in a HashSet during context-cache key derivation and asserts that
@@ -150,8 +152,19 @@ abstract class ReadPathTestSupport
     registry.add("integration-registry.insightconnect.icon-base", () -> "http://icon.test.local");
   }
 
+  @AfterAll
+  static void cleanupBundleDir() throws IOException {
+    if (cacheDir != null) {
+      try (var paths = Files.walk(cacheDir)) {
+        paths.sorted(java.util.Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+      }
+    }
+  }
+
   @BeforeEach
   void resetStateBeforeEachScenario() {
+    // Global flushAll assumes single-threaded test execution: a shared Testcontainers Valkey plus
+    // a blanket flushAll would race across scenarios under JUnit parallelism.
     redis.getConnectionFactory().getConnection().serverCommands().flushAll();
     insightConnectAdapter.reset();
     insightIdrAdapter.reset();
@@ -170,6 +183,20 @@ abstract class ReadPathTestSupport
   /** A NormalizedIntegration whose triplet resolves against the test bundle. */
   protected static NormalizedIntegration integration(
       String product, String sourceType, String sourceValue, IntegrationStatus status) {
+    return integration(
+        product, sourceType, sourceValue, status, Instant.parse("2026-06-01T00:00:00Z"));
+  }
+
+  /**
+   * As {@link #integration(String, String, String, IntegrationStatus)} but with explicit
+   * lastSuccess.
+   */
+  protected static NormalizedIntegration integration(
+      String product,
+      String sourceType,
+      String sourceValue,
+      IntegrationStatus status,
+      Instant lastSuccessTimestamp) {
     return new NormalizedIntegration(
         "i-" + sourceValue,
         new SourceIdentifier(sourceType, sourceValue),
@@ -177,7 +204,7 @@ abstract class ReadPathTestSupport
         "SIEM Event Source",
         "label-" + sourceValue,
         status,
-        Instant.parse("2026-06-01T00:00:00Z"),
+        lastSuccessTimestamp,
         "https://example/config/" + sourceValue,
         ORG);
   }

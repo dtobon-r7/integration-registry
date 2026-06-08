@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.rapid7.integrationregistry.adapter.IntegrationStatus;
 import com.rapid7.integrationregistry.adapter.exception.AdapterAuthException;
 import com.rapid7.integrationregistry.adapter.exception.AdapterUpstreamException;
+import com.rapid7.integrationregistry.controller.dto.HealthState;
 import com.rapid7.integrationregistry.controller.dto.UnavailableProductDto;
 import com.rapid7.integrationregistry.controller.dto.UnavailableReason;
 import com.rapid7.integrationregistry.controller.dto.VendorDetailResponse;
@@ -199,7 +200,10 @@ class ReadPathIntegrationTest extends ReadPathTestSupport {
   @Test
   void vendorDetail_multiService_returnsNestedProjection_withRollups() {
     // Arrange — IDR contributes to both MS services; ICON also contributes to both. A WARNING on
-    // one instance makes the vendor-level rollup observably non-trivial.
+    // the IDR sentinel instance makes the rollups observably non-trivial: the sentinel service is
+    // worst-of(WARNING, HEALTHY)=WARNING, defender stays HEALTHY, and the vendor rolls up to
+    // WARNING. lastSuccess varies per instance so vendor lastUpdated is an unambiguous MAX (the
+    // newest is the ICON sentinel instance at 2026-06-04).
     Instant fetchedAt = Instant.parse("2026-06-02T08:00:00Z");
     insightIdrAdapter.willReturn(
         fetchResult(
@@ -208,31 +212,64 @@ class ReadPathIntegrationTest extends ReadPathTestSupport {
                 INSIGHT_IDR,
                 "product_type",
                 "microsoft-defender-endpoint",
-                IntegrationStatus.HEALTHY),
+                IntegrationStatus.HEALTHY,
+                Instant.parse("2026-06-01T00:00:00Z")),
             integration(
-                INSIGHT_IDR, "product_type", "microsoft-sentinel", IntegrationStatus.WARNING)));
+                INSIGHT_IDR,
+                "product_type",
+                "microsoft-sentinel",
+                IntegrationStatus.WARNING,
+                Instant.parse("2026-06-02T00:00:00Z"))));
     insightConnectAdapter.willReturn(
         fetchResult(
             fetchedAt,
             integration(
-                INSIGHT_CONNECT, "plugin_name", "microsoft-defender", IntegrationStatus.HEALTHY),
+                INSIGHT_CONNECT,
+                "plugin_name",
+                "microsoft-defender",
+                IntegrationStatus.HEALTHY,
+                Instant.parse("2026-06-03T00:00:00Z")),
             integration(
-                INSIGHT_CONNECT, "plugin_name", "microsoft-sentinel", IntegrationStatus.HEALTHY)));
+                INSIGHT_CONNECT,
+                "plugin_name",
+                "microsoft-sentinel",
+                IntegrationStatus.HEALTHY,
+                Instant.parse("2026-06-04T00:00:00Z"))));
 
-    // Act
-    VendorDetailResponse body =
+    // Act — assert the 200 explicitly so a future 404 fails cleanly rather than throwing.
+    ResponseEntity<VendorDetailResponse> response =
         get("/integration-registry/v1/vendors/microsoft")
             .retrieve()
-            .body(VendorDetailResponse.class);
+            .toEntity(VendorDetailResponse.class);
+    assertThat(response.getStatusCode().value()).isEqualTo(200);
+    VendorDetailResponse body = response.getBody();
+    assertThat(body).isNotNull();
 
-    // Assert — vendor header present; two nested vendor services; vendor-level rollups populated.
+    // Assert — vendor header present; two nested vendor services; discriminating rollups.
     assertThat(body.vendorId()).isEqualTo("microsoft");
     assertThat(body.vendorName()).isEqualTo("Microsoft");
     assertThat(body.vendorServices())
         .extracting(VendorServiceCardNestedDto::vendorServiceId)
         .containsExactlyInAnyOrder("microsoft-defender", "microsoft-sentinel");
-    assertThat(body.aggregateHealth()).isNotNull();
-    assertThat(body.lastUpdated()).isNotNull();
+    // Vendor-level rollup: worst-state-wins across all instances => WARNING; lastUpdated = MAX
+    // lastSuccess across the vendor's instances => the newest (ICON sentinel) at 2026-06-04.
+    assertThat(body.aggregateHealth()).isEqualTo(HealthState.WARNING);
+    assertThat(body.lastUpdated()).isEqualTo(Instant.parse("2026-06-04T00:00:00Z"));
     assertThat(body.unavailableProducts()).isEmpty();
+
+    // Per-service rollup: sentinel is worst-of(IDR WARNING, ICON HEALTHY)=WARNING; defender is
+    // worst-of(HEALTHY, HEALTHY)=HEALTHY.
+    VendorServiceCardNestedDto sentinel =
+        body.vendorServices().stream()
+            .filter(s -> s.vendorServiceId().equals("microsoft-sentinel"))
+            .findFirst()
+            .orElseThrow();
+    assertThat(sentinel.aggregateHealth()).isEqualTo(HealthState.WARNING);
+    VendorServiceCardNestedDto defender =
+        body.vendorServices().stream()
+            .filter(s -> s.vendorServiceId().equals("microsoft-defender"))
+            .findFirst()
+            .orElseThrow();
+    assertThat(defender.aggregateHealth()).isEqualTo(HealthState.HEALTHY);
   }
 }
