@@ -15,8 +15,11 @@ import org.testcontainers.utility.DockerImageName;
  * <p>Requires a running Docker daemon. This is the documented exception to the otherwise
  * Docker-free test suite (see TESTING.md).
  */
+// Visibility widened to public so the cross-package WP-04 full-context read-path suite
+// (com.rapid7.integrationregistry.integration.ReadPathTestSupport) can extend this existing
+// Valkey Testcontainers base, as the WP-04 plan requires. No behavior change.
 @Testcontainers
-abstract class ValkeyTestContainer {
+public abstract class ValkeyTestContainer {
 
   @Container
   static final GenericContainer<?> VALKEY =

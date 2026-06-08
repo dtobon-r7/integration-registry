@@ -15,7 +15,10 @@ import java.util.Objects;
  * orgId} is a platform org identifier). If a future key dimension can contain {@code ':'}, its
  * encoding belongs here.
  */
-final class CacheKey {
+// Visibility widened to public (type + of(...)) so the WP-04 cross-package read-path test
+// suite can reuse the single key-construction site instead of duplicating the key format —
+// preserving the "single construction site" invariant this class documents. No behavior change.
+public final class CacheKey {
 
   private static final String PREFIX = "ir:cache:";
   private static final String FIELD_TIER = "tier";
@@ -24,7 +27,7 @@ final class CacheKey {
 
   private CacheKey() {}
 
-  static String of(CacheTier tier, String orgId, String productName) {
+  public static String of(CacheTier tier, String orgId, String productName) {
     Objects.requireNonNull(tier, FIELD_TIER);
     Objects.requireNonNull(orgId, FIELD_ORG_ID);
     Objects.requireNonNull(productName, FIELD_PRODUCT_NAME);
