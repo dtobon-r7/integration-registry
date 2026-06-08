@@ -127,6 +127,22 @@ class ProductOutcomeTest {
   }
 
   @Test
+  void served_staleReason_mustNotBeBlankWhenPresent() {
+    assertThatThrownBy(
+            () ->
+                new ProductOutcome.Served(
+                    "InsightConnect",
+                    List.of(),
+                    Instant.parse("2026-06-05T00:00:00Z"),
+                    false,
+                    true,
+                    Optional.of(Instant.parse("2026-06-04T00:00:00Z")),
+                    Optional.of("  ")))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("staleReason");
+  }
+
+  @Test
   void unavailable_shouldExposeReason_whenOmitted() {
     // Arrange / Act
     ProductOutcome.Unavailable unavailable =

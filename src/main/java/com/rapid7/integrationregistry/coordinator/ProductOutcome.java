@@ -55,6 +55,11 @@ public sealed interface ProductOutcome permits ProductOutcome.Served, ProductOut
       if (stale != staleReason.isPresent()) {
         throw new IllegalArgumentException("staleReason must be present iff stale is true");
       }
+      staleReason.ifPresent(r -> {
+        if (r.isBlank()) {
+          throw new IllegalArgumentException("staleReason must not be blank");
+        }
+      });
       integrations = List.copyOf(integrations);
     }
   }
