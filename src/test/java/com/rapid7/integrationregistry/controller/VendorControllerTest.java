@@ -46,8 +46,9 @@ class VendorControllerTest {
 
   private static final String ORG = "org-123";
   private static final String USER = "user-456";
-  private static final String ORG_ID_HEADER = "X-IPIMS-ORG-ID";
-  private static final String USER_ID_HEADER = "X-IPIMS-USER-ID";
+  // Bind to the controller's own constants (same package) so a header-name change can't pass here.
+  private static final String ORG_ID_HEADER = VendorController.ORG_ID_HEADER;
+  private static final String USER_ID_HEADER = VendorController.USER_ID_HEADER;
 
   @Autowired private MockMvc mockMvc;
   @MockitoBean private VendorService vendorService;
