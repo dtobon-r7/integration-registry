@@ -79,6 +79,22 @@ final class LayerDependencyRules {
           .dependOnClassesThat()
           .resideInAnyPackage("org.springframework..", "software.amazon.awssdk..");
 
+  static final ArchRule authLayer_shouldBeAFrameworkNeutralLeaf =
+      noClasses()
+          .that()
+          .resideInAPackage("..auth..")
+          .should()
+          .dependOnClassesThat()
+          .resideInAnyPackage(
+              "..controller..",
+              "..service..",
+              "..coordinator..",
+              "..aggregator..",
+              "..adapter..",
+              "..cache..",
+              "..mapping..",
+              "org.springframework..");
+
   static final ArchRule adapterExceptions_shouldExtendAdapterExceptionParent =
       classes()
           .that()

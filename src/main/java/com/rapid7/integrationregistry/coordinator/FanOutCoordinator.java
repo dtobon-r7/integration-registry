@@ -3,12 +3,14 @@ package com.rapid7.integrationregistry.coordinator;
 import com.rapid7.integrationregistry.adapter.FetchResult;
 import com.rapid7.integrationregistry.adapter.IntegrationAdapter;
 import com.rapid7.integrationregistry.adapter.exception.AdapterException;
+import com.rapid7.integrationregistry.auth.OutboundAuth;
 import com.rapid7.integrationregistry.cache.IntegrationCache;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -88,6 +90,19 @@ public class FanOutCoordinator {
         throw new IllegalStateException("Duplicate adapter productName registered: " + product);
       }
     }
+  }
+
+  /**
+   * Fetch every registered product's integrations for {@code orgId}, in parallel, taking the
+   * framework-neutral {@link OutboundAuth} carrier so callers in the {@code service} layer need not
+   * depend on {@code org.springframework.http}. Converts the carrier to {@link HttpHeaders} at this
+   * boundary and delegates to {@link #fetchAll(String, HttpHeaders)}.
+   */
+  public List<ProductOutcome> fetchAll(String orgId, OutboundAuth auth) {
+    Objects.requireNonNull(auth, "auth");
+    HttpHeaders headers = new HttpHeaders();
+    auth.headers().forEach(headers::set);
+    return fetchAll(orgId, headers);
   }
 
   /**

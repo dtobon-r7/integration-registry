@@ -34,7 +34,13 @@ class OutcomeClassifier {
     }
     cache.writeOnSuccess(orgId, product, result);
     return new ProductOutcome.Served(
-        product, result.integrations(), result.fetchedAt(), false, false, Optional.empty());
+        product,
+        result.integrations(),
+        result.fetchedAt(),
+        false,
+        false,
+        Optional.empty(),
+        Optional.empty());
   }
 
   ProductOutcome classifyFailure(String orgId, String product, AdapterException failure) {
@@ -55,7 +61,13 @@ class OutcomeClassifier {
 
   ProductOutcome servedFresh(String product, FetchResult result) {
     return new ProductOutcome.Served(
-        product, result.integrations(), result.fetchedAt(), true, false, Optional.empty());
+        product,
+        result.integrations(),
+        result.fetchedAt(),
+        true,
+        false,
+        Optional.empty(),
+        Optional.empty());
   }
 
   /** Stale-fallback decision: serve stale within window, else omit with the given reason. */
@@ -69,7 +81,8 @@ class OutcomeClassifier {
           entry.result().fetchedAt(),
           false,
           true,
-          Optional.of(entry.staleSince()));
+          Optional.of(entry.staleSince()),
+          Optional.of(reason));
     }
     return new ProductOutcome.Unavailable(product, reason);
   }

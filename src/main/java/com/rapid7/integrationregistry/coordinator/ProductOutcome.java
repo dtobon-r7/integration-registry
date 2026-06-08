@@ -29,6 +29,9 @@ public sealed interface ProductOutcome permits ProductOutcome.Served, ProductOut
    * @param cacheHitPerProduct true only on a fresh-tier hit (no adapter call this request)
    * @param stale true when served from the stale tier; {@code staleSince} is then present
    * @param staleSince the original product fetch time of the stale data; present iff {@code stale}
+   * @param staleReason the failure reason that triggered the stale fallback (RFC-001 §Supporting
+   *     types reason enum, sourced from {@code AdapterException.reasonCode()}); present iff {@code
+   *     stale}. Lets T09 populate {@code unavailable_products[].reason} for a stale serve.
    */
   record Served(
       String productName,
@@ -36,7 +39,8 @@ public sealed interface ProductOutcome permits ProductOutcome.Served, ProductOut
       Instant fetchedAt,
       boolean cacheHitPerProduct,
       boolean stale,
-      Optional<Instant> staleSince)
+      Optional<Instant> staleSince,
+      Optional<String> staleReason)
       implements ProductOutcome {
 
     public Served {
@@ -44,9 +48,18 @@ public sealed interface ProductOutcome permits ProductOutcome.Served, ProductOut
       Objects.requireNonNull(integrations, "integrations");
       Objects.requireNonNull(fetchedAt, "fetchedAt");
       Objects.requireNonNull(staleSince, "staleSince");
+      Objects.requireNonNull(staleReason, "staleReason");
       if (stale != staleSince.isPresent()) {
         throw new IllegalArgumentException("staleSince must be present iff stale is true");
       }
+      if (stale != staleReason.isPresent()) {
+        throw new IllegalArgumentException("staleReason must be present iff stale is true");
+      }
+      staleReason.ifPresent(r -> {
+        if (r.isBlank()) {
+          throw new IllegalArgumentException("staleReason must not be blank");
+        }
+      });
       integrations = List.copyOf(integrations);
     }
   }

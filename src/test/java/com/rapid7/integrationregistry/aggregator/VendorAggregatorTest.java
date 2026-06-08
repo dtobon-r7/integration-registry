@@ -56,6 +56,87 @@ class VendorAggregatorTest {
   }
 
   @Nested
+  class PassThroughTest {
+
+    private final VendorAggregator aggregator =
+        aggregatorWith(MapBackedSnapshotBuilder.with(MAPPING_VERSION).build());
+
+    private String expectedMappingVersion() {
+      return MAPPING_VERSION;
+    }
+
+    private VendorServiceCard cardWithCategory(VendorCategory category) {
+      return new VendorServiceCard(
+          "vs-1",
+          "Vendor Service",
+          "v-1",
+          "Vendor",
+          category,
+          0,
+          List.of(),
+          List.of(),
+          IntegrationStatus.HEALTHY,
+          null);
+    }
+
+    private VendorServiceDetail detailWithCategory(VendorCategory category) {
+      return new VendorServiceDetail(
+          "vs-1",
+          "Vendor Service",
+          "v-1",
+          "Vendor",
+          category,
+          0,
+          List.of(),
+          List.of(),
+          IntegrationStatus.HEALTHY,
+          null,
+          List.of());
+    }
+
+    @Test
+    void mappingVersion_passesThroughSnapshotVersion() {
+      // The test's snapshot stub returns a known version; assert the aggregator surfaces it.
+      assertThat(aggregator.mappingVersion()).isEqualTo(expectedMappingVersion());
+    }
+
+    @Test
+    void wireCategoryOf_card_mapsCloudProviderToCloud() {
+      VendorServiceCard card = cardWithCategory(VendorCategory.CLOUD_PROVIDER);
+      assertThat(aggregator.wireCategoryOf(card)).isEqualTo("cloud");
+    }
+
+    @Test
+    void wireCategoryOf_card_mapsIdentityToOther() {
+      VendorServiceCard card = cardWithCategory(VendorCategory.IDENTITY);
+      assertThat(aggregator.wireCategoryOf(card)).isEqualTo("other");
+    }
+
+    @Test
+    void wireCategoryOf_card_mapsNotificationToOther() {
+      VendorServiceCard card = cardWithCategory(VendorCategory.NOTIFICATION);
+      assertThat(aggregator.wireCategoryOf(card)).isEqualTo("other");
+    }
+
+    @Test
+    void wireCategoryOf_card_passesThroughExactMatches() {
+      assertThat(aggregator.wireCategoryOf(cardWithCategory(VendorCategory.EDR))).isEqualTo("edr");
+      assertThat(aggregator.wireCategoryOf(cardWithCategory(VendorCategory.SIEM)))
+          .isEqualTo("siem");
+      assertThat(aggregator.wireCategoryOf(cardWithCategory(VendorCategory.ITSM)))
+          .isEqualTo("itsm");
+      assertThat(aggregator.wireCategoryOf(cardWithCategory(VendorCategory.OTHER)))
+          .isEqualTo("other");
+    }
+
+    @Test
+    void wireCategoryOf_detail_mapsSameAsCard() {
+      VendorServiceDetail detail = detailWithCategory(VendorCategory.CLOUD_PROVIDER);
+      assertThat(aggregator.wireCategoryOf(detail)).isEqualTo("cloud");
+    }
+  }
+
+  @Nested
   class ResolutionTest {
 
     @Test

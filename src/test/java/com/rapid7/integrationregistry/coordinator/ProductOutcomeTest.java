@@ -18,7 +18,13 @@ class ProductOutcomeTest {
     // Arrange / Act
     ProductOutcome.Served served =
         new ProductOutcome.Served(
-            "InsightConnect", List.of(), FETCHED_AT, true, false, Optional.empty());
+            "InsightConnect",
+            List.of(),
+            FETCHED_AT,
+            true,
+            false,
+            Optional.empty(),
+            Optional.empty());
 
     // Assert
     assertThat(served.productName()).isEqualTo("InsightConnect");
@@ -33,7 +39,13 @@ class ProductOutcomeTest {
     assertThatThrownBy(
             () ->
                 new ProductOutcome.Served(
-                    "InsightIDR", List.of(), FETCHED_AT, false, true, Optional.empty()))
+                    "InsightIDR",
+                    List.of(),
+                    FETCHED_AT,
+                    false,
+                    true,
+                    Optional.empty(),
+                    Optional.of("timeout")))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
@@ -43,7 +55,13 @@ class ProductOutcomeTest {
     assertThatThrownBy(
             () ->
                 new ProductOutcome.Served(
-                    "InsightIDR", List.of(), FETCHED_AT, false, false, Optional.of(FETCHED_AT)))
+                    "InsightIDR",
+                    List.of(),
+                    FETCHED_AT,
+                    false,
+                    false,
+                    Optional.of(FETCHED_AT),
+                    Optional.empty()))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
@@ -55,11 +73,73 @@ class ProductOutcomeTest {
     // Act
     ProductOutcome.Served served =
         new ProductOutcome.Served(
-            "InsightConnect", mutable, FETCHED_AT, true, false, Optional.empty());
+            "InsightConnect", mutable, FETCHED_AT, true, false, Optional.empty(), Optional.empty());
     mutable.add(null); // mutate the source list after construction
 
     // Assert: the record's copy is unaffected
     assertThat(served.integrations()).isEmpty();
+  }
+
+  @Test
+  void served_staleReason_mustBePresentWhenStale() {
+    assertThatThrownBy(
+            () ->
+                new ProductOutcome.Served(
+                    "InsightConnect",
+                    List.of(),
+                    Instant.parse("2026-06-05T00:00:00Z"),
+                    false,
+                    true,
+                    Optional.of(Instant.parse("2026-06-04T00:00:00Z")),
+                    Optional.empty()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("staleReason");
+  }
+
+  @Test
+  void served_staleReason_mustBeAbsentWhenNotStale() {
+    assertThatThrownBy(
+            () ->
+                new ProductOutcome.Served(
+                    "InsightConnect",
+                    List.of(),
+                    Instant.parse("2026-06-05T00:00:00Z"),
+                    false,
+                    false,
+                    Optional.empty(),
+                    Optional.of("timeout")))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("staleReason");
+  }
+
+  @Test
+  void served_staleServe_carriesReasonAndStaleSince() {
+    ProductOutcome.Served served =
+        new ProductOutcome.Served(
+            "InsightConnect",
+            List.of(),
+            Instant.parse("2026-06-05T00:00:00Z"),
+            false,
+            true,
+            Optional.of(Instant.parse("2026-06-04T00:00:00Z")),
+            Optional.of("timeout"));
+    assertThat(served.staleReason()).contains("timeout");
+  }
+
+  @Test
+  void served_staleReason_mustNotBeBlankWhenPresent() {
+    assertThatThrownBy(
+            () ->
+                new ProductOutcome.Served(
+                    "InsightConnect",
+                    List.of(),
+                    Instant.parse("2026-06-05T00:00:00Z"),
+                    false,
+                    true,
+                    Optional.of(Instant.parse("2026-06-04T00:00:00Z")),
+                    Optional.of("  ")))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("staleReason");
   }
 
   @Test
