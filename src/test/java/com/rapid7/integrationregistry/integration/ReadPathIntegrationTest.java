@@ -136,13 +136,14 @@ class ReadPathIntegrationTest extends ReadPathTestSupport {
     // the oldest contributing fetch (the stale IDR fetch); the grid still carries IDR's data.
     assertThat(body.metadata().cacheHit()).isFalse();
     assertThat(body.metadata().asOf()).isEqualTo(staleFetchedAt);
-    UnavailableProductDto idr =
-        body.unavailableProducts().stream()
-            .filter(u -> u.productName().equals(INSIGHT_IDR))
-            .findFirst()
-            .orElseThrow();
-    assertThat(idr.stale()).isTrue();
-    assertThat(idr.staleSince()).isEqualTo(staleFetchedAt);
+    assertThat(body.unavailableProducts())
+        .filteredOn(u -> u.productName().equals(INSIGHT_IDR))
+        .singleElement()
+        .satisfies(
+            idr -> {
+              assertThat(idr.stale()).isTrue();
+              assertThat(idr.staleSince()).isEqualTo(staleFetchedAt);
+            });
     assertThat(body.vendorServices()).isNotEmpty();
   }
 
@@ -163,14 +164,15 @@ class ReadPathIntegrationTest extends ReadPathTestSupport {
             .body(VendorServicesResponse.class);
 
     // Assert — IDR omitted: stale:false + reason auth_failure, no stale_since; ICON present.
-    UnavailableProductDto idr =
-        body.unavailableProducts().stream()
-            .filter(u -> u.productName().equals(INSIGHT_IDR))
-            .findFirst()
-            .orElseThrow();
-    assertThat(idr.stale()).isFalse();
-    assertThat(idr.reason()).isEqualTo(UnavailableReason.AUTH_FAILURE);
-    assertThat(idr.staleSince()).isNull();
+    assertThat(body.unavailableProducts())
+        .filteredOn(u -> u.productName().equals(INSIGHT_IDR))
+        .singleElement()
+        .satisfies(
+            idr -> {
+              assertThat(idr.stale()).isFalse();
+              assertThat(idr.reason()).isEqualTo(UnavailableReason.AUTH_FAILURE);
+              assertThat(idr.staleSince()).isNull();
+            });
     assertThat(body.vendorServices()).isNotEmpty();
   }
 
@@ -259,17 +261,13 @@ class ReadPathIntegrationTest extends ReadPathTestSupport {
 
     // Per-service rollup: sentinel is worst-of(IDR WARNING, ICON HEALTHY)=WARNING; defender is
     // worst-of(HEALTHY, HEALTHY)=HEALTHY.
-    VendorServiceCardNestedDto sentinel =
-        body.vendorServices().stream()
-            .filter(s -> s.vendorServiceId().equals("microsoft-sentinel"))
-            .findFirst()
-            .orElseThrow();
-    assertThat(sentinel.aggregateHealth()).isEqualTo(HealthState.WARNING);
-    VendorServiceCardNestedDto defender =
-        body.vendorServices().stream()
-            .filter(s -> s.vendorServiceId().equals("microsoft-defender"))
-            .findFirst()
-            .orElseThrow();
-    assertThat(defender.aggregateHealth()).isEqualTo(HealthState.HEALTHY);
+    assertThat(body.vendorServices())
+        .filteredOn(s -> s.vendorServiceId().equals("microsoft-sentinel"))
+        .singleElement()
+        .satisfies(s -> assertThat(s.aggregateHealth()).isEqualTo(HealthState.WARNING));
+    assertThat(body.vendorServices())
+        .filteredOn(s -> s.vendorServiceId().equals("microsoft-defender"))
+        .singleElement()
+        .satisfies(s -> assertThat(s.aggregateHealth()).isEqualTo(HealthState.HEALTHY));
   }
 }
