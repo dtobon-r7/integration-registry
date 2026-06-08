@@ -14,6 +14,7 @@ import com.rapid7.integrationregistry.controller.dto.HealthState;
 import com.rapid7.integrationregistry.controller.dto.ResponseMetadataDto;
 import com.rapid7.integrationregistry.controller.dto.UnavailableProductDto;
 import com.rapid7.integrationregistry.controller.dto.UnavailableReason;
+import com.rapid7.integrationregistry.controller.dto.VendorDetailResponse;
 import com.rapid7.integrationregistry.controller.dto.VendorServiceDetailResponse;
 import com.rapid7.integrationregistry.controller.dto.VendorServicesResponse;
 import com.rapid7.integrationregistry.controller.dto.VendorsResponse;
@@ -110,6 +111,30 @@ class VendorControllerTest {
                 .header(USER_ID_HEADER, USER))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.vendor_service_id").value("microsoft-defender"));
+  }
+
+  @Test
+  void vendorDetail_present_returns200() throws Exception {
+    when(vendorService.getVendorDetail(eq(ORG), eq("microsoft"), any()))
+        .thenReturn(
+            Optional.of(
+                new VendorDetailResponse(
+                    "microsoft",
+                    "Microsoft",
+                    HealthState.HEALTHY,
+                    Instant.parse("2026-04-23T10:00:00Z"),
+                    List.of(),
+                    List.of(),
+                    meta())));
+
+    mockMvc
+        .perform(
+            get("/integration-registry/v1/vendors/microsoft")
+                .header(ORG_ID_HEADER, ORG)
+                .header(USER_ID_HEADER, USER))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.vendor_id").value("microsoft"))
+        .andExpect(jsonPath("$.vendor_name").value("Microsoft"));
   }
 
   @Test
@@ -232,6 +257,8 @@ class VendorControllerTest {
     // controller has no auth path and never self-emits 401/UNAUTHENTICATED.
     mockMvc
         .perform(get("/integration-registry/v1/vendor-services").header(USER_ID_HEADER, USER))
-        .andExpect(status().isBadRequest());
+        .andExpect(status().isBadRequest())
+        // 400, not 401, and the controller's advice did not run: no error envelope is emitted.
+        .andExpect(jsonPath("$.error").doesNotExist());
   }
 }
