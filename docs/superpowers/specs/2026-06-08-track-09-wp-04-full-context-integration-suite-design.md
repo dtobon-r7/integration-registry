@@ -18,10 +18,13 @@ exit criteria end-to-end behind the HTTP edge.
    TESTING.md). The suite extends the existing `ValkeyTestContainer` base. The work
    plan's line-21 "(no TestContainers)" parenthetical predated ADR-006 and is
    superseded.
-2. **Adapters faked with Mockito stub beans** — two products (`InsightIDR`,
-   `InsightConnect`). The real `InsightConnectAdapter` is replaced/neutralized so it
-   is not part of the coordinator's autowired `Set<IntegrationAdapter>`; WireMock and
-   real-adapter HTTP parsing are out of scope (adapter-contract-test territory).
+2. **Adapters faked with hand-written stub beans** — two products (`InsightIDR`,
+   `InsightConnect`). Mockito mocks are disqualified: `FanOutCoordinator` validates
+   `productName()` in its constructor at boot, where a mock returns `null` and fails
+   the context. See *Stub-adapter mechanism (RESOLVED)* below for the full rationale
+   and the `TypeExcludeFilter` that removes the real `InsightConnectAdapter` from the
+   coordinator's autowired `Set<IntegrationAdapter>`. WireMock and real-adapter HTTP
+   parsing are out of scope (adapter-contract-test territory).
 3. **One shared purpose-built multi-service test bundle** — a single `@SpringBootTest`
    context (boots once). Microsoft carries 2+ vendor services for the vendor-scoped
    scenario; per-scenario variation comes from cache seeding + adapter stubbing, never
@@ -47,8 +50,9 @@ RestClient ──HTTP──▶ VendorController ─▶ VendorService ─▶ FanO
 ```
 
 - **Real**: controller, service, coordinator, aggregator, cache, mapping snapshot, Valkey.
-- **Faked**: the two `IntegrationAdapter` beans (Mockito stubs); `S3Client`
-  (`@MockitoBean`) — the bundle is staged on disk so the loader reads it without S3.
+- **Faked**: the two `IntegrationAdapter` beans (hand-written `StubAdapter`s, not
+  Mockito — see *Stub-adapter mechanism* below); `S3Client` (`@MockitoBean`) — the
+  bundle is staged on disk so the loader reads it without S3.
 
 ### Boot wiring
 

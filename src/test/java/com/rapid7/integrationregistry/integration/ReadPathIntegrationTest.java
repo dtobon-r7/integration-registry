@@ -32,7 +32,8 @@ class ReadPathIntegrationTest extends ReadPathTestSupport {
 
     // Act — both stub adapters are injected and the coordinator wired.
     // Assert — the two stubs are present with the expected product names; the real
-    // InsightConnectAdapter was evicted by the name-colliding stub bean.
+    // InsightConnectAdapter was evicted from the component scan by ExcludeRealAdapters
+    // (the TypeExcludeFilter on ReadPathTestSupport), so only the two stubs remain.
     assertThat(insightConnectAdapter.productName()).isEqualTo(INSIGHT_CONNECT);
     assertThat(insightIdrAdapter.productName()).isEqualTo(INSIGHT_IDR);
     assertThat(coordinator).isNotNull();

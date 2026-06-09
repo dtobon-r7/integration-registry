@@ -22,6 +22,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -164,8 +165,11 @@ abstract class ReadPathTestSupport
   @BeforeEach
   void resetStateBeforeEachScenario() {
     // Global flushAll assumes single-threaded test execution: a shared Testcontainers Valkey plus
-    // a blanket flushAll would race across scenarios under JUnit parallelism.
-    redis.getConnectionFactory().getConnection().serverCommands().flushAll();
+    // a blanket flushAll would race across scenarios under JUnit parallelism. Close the connection
+    // (try-with-resources) so the per-test reset never leaks a connection across the suite.
+    try (RedisConnection connection = redis.getConnectionFactory().getConnection()) {
+      connection.serverCommands().flushAll();
+    }
     insightConnectAdapter.reset();
     insightIdrAdapter.reset();
   }
