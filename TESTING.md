@@ -114,6 +114,10 @@ integration tests may assert a full workflow.
 
 - `src/test/java/com/rapid7/integrationregistry/<layer>/...` — tests
   for code in the matching main package
+- `src/test/java/com/rapid7/integrationregistry/integration/` —
+  full-context read-path integration suites that span every layer
+  (controller → service → coordinator → aggregator → cache) and so
+  belong to no single layer package (e.g. ReadPathIntegrationTest)
 - `src/test/java/com/rapid7/integrationregistry/testsupport/` — shared
   test utilities (e.g. FixtureLoader)
 - `src/test/java/com/rapid7/integrationregistry/testsupport/examples/` —
