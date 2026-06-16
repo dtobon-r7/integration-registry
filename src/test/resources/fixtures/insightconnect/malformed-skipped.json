@@ -1,27 +1,29 @@
 {
-  "data": [
-    {
-      "id": "c1a2b3c4-0001-0001-0001-000000000001",
-      "name": "Jira Production",
-      "plugin": { "name": "jira", "pluginVendor": "rapid7", "pluginVersion": "11.3.0" },
-      "orchestrator": { "id": "orch-1", "name": "Cloud Orchestrator", "status": "healthy", "version": "3.1.4" },
-      "connectionTests": [
-        { "id": "ct-1", "connectionId": "c1a2b3c4-0001-0001-0001-000000000001", "status": "success", "isStale": false, "errorMessage": null, "createdAt": "2026-05-19T10:00:00Z" }
-      ]
-    },
-    {
-      "id": "c1a2b3c4-0002-0002-0002-000000000002",
-      "name": "Missing Plugin Name",
-      "plugin": { "name": null, "pluginVendor": "rapid7", "pluginVersion": "11.3.0" },
-      "orchestrator": { "id": "orch-1", "name": "Cloud Orchestrator", "status": "healthy", "version": "3.1.4" },
-      "connectionTests": []
-    },
-    {
-      "name": "Missing Id",
-      "plugin": { "name": "jira", "pluginVendor": "rapid7", "pluginVersion": "11.3.0" },
-      "orchestrator": { "id": "orch-1", "name": "Cloud Orchestrator", "status": "healthy", "version": "3.1.4" },
-      "connectionTests": []
-    }
-  ],
-  "metadata": { "total": 3 }
+  "data": {
+    "connections": [
+      {
+        "id": "c1a2b3c4-0001-0001-0001-000000000001",
+        "name": "Jira Production",
+        "plugin": { "name": "Jira", "slugName": "jira", "pluginVendor": "rapid7", "pluginVersion": "11.3.0" },
+        "orchestrator": { "id": "orch-1", "name": "Cloud Orchestrator", "status": "healthy", "version": "3.1.4" },
+        "tests": [
+          { "id": "ct-1", "connectionId": "c1a2b3c4-0001-0001-0001-000000000001", "status": "success", "isStale": false, "errorMessage": null, "createdAt": "2026-05-19T10:00:00Z" }
+        ]
+      },
+      {
+        "id": "c1a2b3c4-0002-0002-0002-000000000002",
+        "name": "Missing Plugin Slug",
+        "plugin": { "name": "Jira", "slugName": null, "pluginVendor": "rapid7", "pluginVersion": "11.3.0" },
+        "orchestrator": { "id": "orch-1", "name": "Cloud Orchestrator", "status": "healthy", "version": "3.1.4" },
+        "tests": []
+      },
+      {
+        "name": "Missing Id",
+        "plugin": { "name": "Jira", "slugName": "jira", "pluginVendor": "rapid7", "pluginVersion": "11.3.0" },
+        "orchestrator": { "id": "orch-1", "name": "Cloud Orchestrator", "status": "healthy", "version": "3.1.4" },
+        "tests": []
+      }
+    ],
+    "meta": { "total": 3 }
+  }
 }

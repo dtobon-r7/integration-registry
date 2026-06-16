@@ -203,7 +203,7 @@ public class FanOutCoordinator {
     String product = dispatch.product();
     long perAdapterMs = properties.perAdapterTimeoutFor(product).toMillis();
     long untilDeadlineMs = Duration.between(Instant.now(), deadline).toMillis();
-    long waitMs = Math.max(0, Math.min(perAdapterMs, untilDeadlineMs));
+    long waitMs = Math.clamp(perAdapterMs, 0, untilDeadlineMs);
     try {
       return dispatch.future().get(waitMs, TimeUnit.MILLISECONDS);
     } catch (TimeoutException e) {

@@ -51,7 +51,10 @@ class MvpSeedBundleTest {
   void mvpSeed_shouldResolveDefenderViaICON_toMicrosoftDefender() {
     // Act
     VendorResolution resolution =
-        snapshot.lookup(ProductName.INSIGHT_CONNECT, SourceType.PLUGIN_NAME, "microsoft-defender");
+        snapshot.lookup(
+            ProductName.INSIGHT_CONNECT,
+            SourceType.PLUGIN_NAME,
+            "rapid7_insightconnect_microsoft_defender");
 
     // Assert — proves the cross-product merge: ICON-side identifier resolves to the
     // SAME vendor service / vendor as the IDR-side identifier above.
@@ -66,7 +69,8 @@ class MvpSeedBundleTest {
   void mvpSeed_shouldResolveJiraViaICON_toJira() {
     // Act
     VendorResolution resolution =
-        snapshot.lookup(ProductName.INSIGHT_CONNECT, SourceType.PLUGIN_NAME, "jira");
+        snapshot.lookup(
+            ProductName.INSIGHT_CONNECT, SourceType.PLUGIN_NAME, "rapid7_insightconnect_jira");
 
     // Assert
     assertThat(resolution.vendorServiceId()).isEqualTo("jira");

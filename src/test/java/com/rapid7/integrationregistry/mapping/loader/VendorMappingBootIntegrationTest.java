@@ -191,15 +191,18 @@ class VendorMappingBootIntegrationTest {
       assertThat(idrDefender.vendorId()).isEqualTo("microsoft");
       assertThat(idrDefender.vendorName()).isEqualTo("Microsoft");
 
-      // Microsoft Defender via InsightConnect
+      // Microsoft Defender via InsightConnect (source_value is komand's plugin slug)
       VendorResolution iconDefender =
           vendorMappingSnapshot.lookup(
-              ProductName.INSIGHT_CONNECT, SourceType.PLUGIN_NAME, "microsoft-defender");
+              ProductName.INSIGHT_CONNECT,
+              SourceType.PLUGIN_NAME,
+              "rapid7_insightconnect_microsoft_defender");
       assertThat(iconDefender.vendorServiceId()).isEqualTo("microsoft-defender");
 
-      // Jira via InsightConnect
+      // Jira via InsightConnect (source_value is komand's plugin slug)
       VendorResolution jira =
-          vendorMappingSnapshot.lookup(ProductName.INSIGHT_CONNECT, SourceType.PLUGIN_NAME, "jira");
+          vendorMappingSnapshot.lookup(
+              ProductName.INSIGHT_CONNECT, SourceType.PLUGIN_NAME, "rapid7_insightconnect_jira");
       assertThat(jira.vendorServiceId()).isEqualTo("jira");
       assertThat(jira.vendorId()).isEqualTo("atlassian");
 
