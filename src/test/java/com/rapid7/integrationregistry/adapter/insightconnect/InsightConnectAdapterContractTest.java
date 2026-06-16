@@ -192,7 +192,7 @@ class InsightConnectAdapterContractTest {
   }
 
   @Test
-  void fetch_shouldSkipMalformedRecords_whenIdOrPluginNameMissing() throws Exception {
+  void fetch_shouldSkipMalformedRecords_whenIdOrPluginSlugNameMissing() throws Exception {
     // Arrange — fixture has 1 valid + 2 malformed (null plugin.slugName, missing id)
     Harness h = harness();
     stub(h.server(), "malformed-skipped.json");
