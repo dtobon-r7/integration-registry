@@ -43,6 +43,14 @@ import org.springframework.stereotype.Service;
  * oldest contributing fetch, {@code cache_hit} requires every product fresh, and 404 is asserted
  * only when fresh and stale both confirm emptiness.
  */
+// CouplingBetweenObjects + TooManyMethods: this class is the read-path assembly point for all four
+// routes. By design it touches every Plan-01 response DTO, its nested DTOs, and the aggregator
+// projection records it maps from — the coupling and method count are inherent to assembling the
+// wire contract from projections, not accidental. One assembly helper per response shape
+// (list/detail x vendor/vendor-service) plus the shared spine pushes both metrics past the project
+// thresholds. Splitting the assembly across helper classes would only relocate the same fan-in.
+// Suppressed locally and justified rather than weakening the project-wide thresholds, mirroring the
+// existing precedent on FanOutCoordinator and VendorAggregator.
 @SuppressWarnings({"PMD.CouplingBetweenObjects", "PMD.TooManyMethods"})
 @Service
 public class VendorService {
@@ -119,8 +127,8 @@ public class VendorService {
   private static List<UnavailableProductDto> unavailableProducts(List<ProductOutcome> outcomes) {
     List<UnavailableProductDto> out = new ArrayList<>();
     for (ProductOutcome o : outcomes) {
-      if (o instanceof ProductOutcome.Unavailable(String productName, String reason)) {
-        out.add(new UnavailableProductDto(productName, false, reasonOf(reason), null));
+      if (o instanceof ProductOutcome.Unavailable u) {
+        out.add(new UnavailableProductDto(u.productName(), false, reasonOf(u.reason()), null));
       } else if (o instanceof ProductOutcome.Served served && served.stale()) {
         // stale ⇒ staleReason and staleSince both present, by the ProductOutcome.Served invariant.
         out.add(

@@ -68,7 +68,7 @@ public class InsightConnectAdapter implements IntegrationAdapter {
 
     warnIfTruncated(response, connections.size());
 
-    // Skip records missing the identity fields we cannot normalize (id, plugin name)
+    // Skip records missing the identity fields we cannot normalize (id, plugin slug)
     // rather than throwing — one malformed connection must not zero out the whole
     // InsightConnect view. Skips are logged so a curator can investigate.
     List<NormalizedIntegration> integrations =
