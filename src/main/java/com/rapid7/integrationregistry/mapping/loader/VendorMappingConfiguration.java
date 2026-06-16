@@ -39,11 +39,10 @@ public class VendorMappingConfiguration {
    * reach LocalStack. Production is unaffected: it has no {@code local} profile, so the
    * {@code @ConditionalOnMissingBean} default above remains the bean in every deployed environment.
    *
-   * <p>{@code @Primary} so it wins injection over the default {@code @ConditionalOnMissingBean}
-   * client (which still registers, since this bean is declared after it): in the {@code local}
-   * profile both beans exist and {@code @Primary} disambiguates. {@code endpointOverride} reads
-   * {@code AWS_ENDPOINT_URL}; credentials and region come from the standard env chain (set to
-   * LocalStack dummies in service-config).
+   * <p>Under the {@code local} profile two {@code S3Client} beans exist; {@code @Primary} on this
+   * one is what disambiguates the by-type injection at the bundle loader — it does not rely on bean
+   * declaration order. {@code endpointOverride} reads {@code AWS_ENDPOINT_URL}; credentials and
+   * region come from the standard env chain (set to LocalStack dummies in service-config).
    */
   @Bean
   @Primary

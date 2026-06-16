@@ -224,7 +224,7 @@ class InsightConnectAdapterContractTest {
   }
 
   @Test
-  void fetch_shouldStillReturnConnections_whenMetadataTotalExceedsReturned() throws Exception {
+  void fetch_shouldStillReturnConnections_whenMetaTotalExceedsReturned() throws Exception {
     // Arrange — data.meta.total (5) > connections.size() (1): a pagination-truncation signal.
     // The adapter logs a WARN but still returns what it got (no throw, no drop).
     Harness h = harness();
