@@ -102,7 +102,7 @@ class InsightConnectAdapterContractTest {
     NormalizedIntegration n = result.integrations().get(0);
     assertThat(n.status()).isEqualTo(IntegrationStatus.HEALTHY);
     assertThat(n.sourceIdentifier().sourceType()).isEqualTo("plugin_name");
-    assertThat(n.sourceIdentifier().sourceValue()).isEqualTo("jira");
+    assertThat(n.sourceIdentifier().sourceValue()).isEqualTo("rapid7_insightconnect_jira");
     assertThat(n.productName()).isEqualTo("InsightConnect");
     assertThat(n.integrationType()).isEqualTo("Automation Plugin");
     assertThat(n.integrationLabel()).isNull();
@@ -179,7 +179,10 @@ class InsightConnectAdapterContractTest {
     assertThat(result.integrations()).hasSize(3);
     assertThat(result.integrations())
         .extracting(n -> n.sourceIdentifier().sourceValue())
-        .containsExactlyInAnyOrder("jira", "jira", "microsoft-defender");
+        .containsExactlyInAnyOrder(
+            "rapid7_insightconnect_jira",
+            "rapid7_insightconnect_jira",
+            "rapid7_insightconnect_microsoft_defender");
     // The jira/warning/stale/failed connection resolves to ERROR (precedence)
     assertThat(result.integrations())
         .filteredOn(n -> n.integrationId().equals("c1a2b3c4-0002-0002-0002-000000000002"))
@@ -230,7 +233,7 @@ class InsightConnectAdapterContractTest {
             { "data": { "connections": [ {
                 "id": "c-1",
                 "name": "Jira",
-                "plugin": { "name": "Jira", "slugName": "jira", "pluginVendor": "rapid7", "pluginVersion": "11.3.0" },
+                "plugin": { "name": "Jira", "slugName": "rapid7_insightconnect_jira", "pluginVendor": "rapid7", "pluginVersion": "11.3.0" },
                 "orchestrator": { "id": "o", "name": "Orch", "status": "healthy", "version": "3" },
                 "tests": [
                     { "id": "ct", "connectionId": "c-1", "status": "success", "isStale": false, "errorMessage": null, "createdAt": "2026-05-19T10:00:00Z" }
@@ -257,7 +260,7 @@ class InsightConnectAdapterContractTest {
             { "data": { "connections": [ {
                 "id": "c-9",
                 "name": "Jira With URL",
-                "plugin": { "name": "Jira", "slugName": "jira", "pluginVendor": "rapid7", "pluginVersion": "11.3.0" },
+                "plugin": { "name": "Jira", "slugName": "rapid7_insightconnect_jira", "pluginVendor": "rapid7", "pluginVersion": "11.3.0" },
                 "orchestrator": { "id": "o", "name": "Orch", "status": "healthy", "version": "3" },
                 "configurationUrl": "https://custom.example/connections/c-9",
                 "tests": [

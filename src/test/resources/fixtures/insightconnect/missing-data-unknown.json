@@ -4,7 +4,7 @@
       {
         "id": "c1a2b3c4-0004-0004-0004-000000000004",
         "name": "Jira Unknown",
-        "plugin": { "name": "Jira", "slugName": "jira", "pluginVendor": "rapid7", "pluginVersion": "11.3.0" },
+        "plugin": { "name": "Jira", "slugName": "rapid7_insightconnect_jira", "pluginVendor": "rapid7", "pluginVersion": "11.3.0" },
         "orchestrator": { "id": "orch-1", "name": "Cloud Orchestrator", "status": "unknown", "version": "3.1.4" },
         "tests": [
           { "id": "ct-4", "connectionId": "c1a2b3c4-0004-0004-0004-000000000004", "status": "success", "isStale": false, "errorMessage": null, "createdAt": "2026-05-18T08:00:00Z" }
