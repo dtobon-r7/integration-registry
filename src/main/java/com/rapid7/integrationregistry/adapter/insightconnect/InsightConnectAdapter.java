@@ -167,8 +167,9 @@ public class InsightConnectAdapter implements IntegrationAdapter {
   private NormalizedIntegration normalize(ConnectionViewModel cvm, String orgId) {
     // id and plugin.slugName are guaranteed non-blank here by isNormalizable().
     String orchestratorStatus = cvm.orchestrator() == null ? null : cvm.orchestrator().status();
-    IntegrationStatus status = statusMapper.deriveStatus(orchestratorStatus, cvm.tests());
-    Instant lastSuccess = statusMapper.deriveLastSuccess(cvm.tests());
+    List<ConnectionTest> tests = cvm.tests();
+    IntegrationStatus status = statusMapper.deriveStatus(orchestratorStatus, tests);
+    Instant lastSuccess = statusMapper.deriveLastSuccess(tests);
     String pluginSlug = cvm.plugin().slugName();
 
     return new NormalizedIntegration(

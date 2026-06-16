@@ -23,17 +23,19 @@ public record ConnectionsResponse(Data data) {
 
   /** The connection list, or an empty list when {@code data} or {@code connections} is absent. */
   public List<ConnectionViewModel> connections() {
-    if (data == null || data.connections() == null) {
+    if (data == null) {
       return List.of();
     }
-    return data.connections();
+    List<ConnectionViewModel> connections = data.connections();
+    return connections == null ? List.of() : connections;
   }
 
   /** The reported total, or {@code null} when no {@code meta.total} is present. */
   public Integer total() {
-    if (data == null || data.meta() == null) {
+    if (data == null) {
       return null;
     }
-    return data.meta().total();
+    Meta meta = data.meta();
+    return meta == null ? null : meta.total();
   }
 }
