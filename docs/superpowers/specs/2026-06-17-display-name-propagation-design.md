@@ -47,6 +47,13 @@ Both resolve to the **same** `VendorResolution` (vendor service
 `microsoft-defender`). This is the cross-product merge working as designed
 (KB `21.03` Entity Model; work-plan 02 acceptance signal #4).
 
+> **Post-merge refinement:** a follow-up commit changed the ICON Defender data
+> source's curated label from "Microsoft Defender" to **"Microsoft Defender
+> (InsightConnect)"** so the expanded row disambiguates by source product
+> instead of duplicating the parent vendor-service row. The two-distinct-labels
+> reasoning above is unchanged; only the ICON label string was refined. The
+> shipped `mvp-seed.yaml` and `MvpSeedBundleTest` are the source of truth.
+
 **Therefore `display_name` must stay at data-source cardinality and must NOT be
 added to `VendorResolution`.** Adding it would (a) conflate data-source display
 into vendor-service identity, and (b) break

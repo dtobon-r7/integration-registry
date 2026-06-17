@@ -684,7 +684,7 @@ Apply these exact edits:
 **`mapping/MvpSeedBundleTest.java`** — three resolving tests use `VendorResolution resolution = snapshot.lookup(...)` then assert `.vendorServiceId()` etc., and one asserts `isSameAs(VendorResolution.unknown())`:
 - In `mvpSeed_shouldResolveDefenderViaIDR_toMicrosoftDefender`, `mvpSeed_shouldResolveDefenderViaICON_toMicrosoftDefender`, `mvpSeed_shouldResolveJiraViaICON_toJira`: change the local var type to `DataSourceResolution resolution = ...` and change each `resolution.vendorServiceId()` → `resolution.identity().vendorServiceId()` (and likewise `.vendorServiceName()`, `.vendorCategory()`, `.vendorId()`, `.vendorName()`). Add an assertion on the curated label in each:
   - IDR Defender: `assertThat(resolution.displayName()).isEqualTo("Microsoft Defender for Endpoint");`
-  - ICON Defender: `assertThat(resolution.displayName()).isEqualTo("Microsoft Defender");`
+  - ICON Defender: `assertThat(resolution.displayName()).isEqualTo("Microsoft Defender");` *(post-merge refinement: the shipped seed + test use `"Microsoft Defender (InsightConnect)"` to disambiguate by source product — the seed bundle and `MvpSeedBundleTest` are the source of truth.)*
   - Jira: `assertThat(resolution.displayName()).isEqualTo("Jira");`
 - In `mvpSeed_shouldReturnUnknown_forUnmappedTriplet`: change `VendorResolution resolution` → `DataSourceResolution resolution` and `isSameAs(VendorResolution.unknown())` → `isSameAs(DataSourceResolution.unknown())`.
 

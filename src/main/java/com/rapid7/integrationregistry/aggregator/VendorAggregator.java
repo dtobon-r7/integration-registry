@@ -223,7 +223,11 @@ public final class VendorAggregator {
           snapshot.lookup(productEnum.get(), sourceTypeEnum.get(), sourceValue);
       String dataSourceId =
           DataSourceIdMinter.mint(rawProductName, sourceTypeEnum.get(), sourceValue);
-      if (Objects.equals(resolution.identity(), VendorResolution.unknown())) {
+      // Reference check on the unknown() singleton: the snapshot returns a DataSourceResolution
+      // whose identity IS the VendorResolution.unknown() singleton for unmapped triplets, so
+      // reference equality suffices and avoids a 5-field record-equals on the per-request hot
+      // path — mirroring LoggingVendorMappingSnapshot. PMD can't see the singleton invariant.
+      if (isUnknown(resolution)) {
         warnOnceForTriplet(rawProductName, rawSourceType, sourceValue, warned);
       }
       // displayName is the curated, data-source-level bundle label (or "Unknown" for unmapped
@@ -237,6 +241,14 @@ public final class VendorAggregator {
     String dataSourceId = DataSourceIdMinter.mint(rawProductName, rawSourceType, sourceValue);
     warnOnceForTriplet(rawProductName, rawSourceType, sourceValue, warned);
     return new ResolvedInstance(n, dataSourceId, resolution.identity(), resolution.displayName());
+  }
+
+  // Reference identity is the contract: the snapshot returns a resolution whose identity is the
+  // VendorResolution.unknown() singleton for unmapped triplets. PMD's CompareObjectsWithEquals
+  // can't see that invariant, so we suppress locally rather than fall back to a record-equals.
+  @SuppressWarnings("PMD.CompareObjectsWithEquals")
+  private static boolean isUnknown(DataSourceResolution resolution) {
+    return resolution.identity() == VendorResolution.unknown();
   }
 
   private void warnOnceForTriplet(
