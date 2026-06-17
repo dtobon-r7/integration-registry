@@ -23,8 +23,10 @@ import org.springframework.web.client.RestClientException;
 
 /**
  * InsightConnect adapter. Fetches automation connections from {@code GET
- * /api/public/v1/connections?includeTests=1} and normalizes each to a {@link NormalizedIntegration}
- * (RFC-001 §InsightConnectAdapter).
+ * /api/class3/v1/connections?includeTests=1} and normalizes each to a {@link NormalizedIntegration}
+ * (RFC-001 §InsightConnectAdapter). The Class 3 route is komand's inter-product path: it
+ * authenticates on the forwarded {@code X-IPIMS-*} identity headers alone (ADR-004), unlike the
+ * Class 2 ({@code /api/public}) path which requires a komand UI session.
  *
  * <p>Per ADR-002 the outbound call uses {@link RestClient}. Async fan-out is the T07 coordinator's
  * concern; this adapter makes one blocking call.
@@ -37,7 +39,7 @@ public class InsightConnectAdapter implements IntegrationAdapter {
   static final String PRODUCT_NAME = "InsightConnect";
   static final String INTEGRATION_TYPE = "Automation Plugin";
   static final String SOURCE_TYPE = "plugin_name";
-  private static final String CONNECTIONS_PATH = "/api/public/v1/connections?includeTests=1";
+  private static final String CONNECTIONS_PATH = "/api/class3/v1/connections?includeTests=1";
 
   private final RestClient restClient;
   private final ConnectionStatusMapper statusMapper;
@@ -62,12 +64,11 @@ public class InsightConnectAdapter implements IntegrationAdapter {
       throws AdapterTimeoutException, AdapterAuthException, AdapterUpstreamException {
 
     ConnectionsResponse response = call(authHeaders);
-    List<ConnectionViewModel> connections =
-        response == null || response.data() == null ? List.of() : response.data();
+    List<ConnectionViewModel> connections = response == null ? List.of() : response.connections();
 
     warnIfTruncated(response, connections.size());
 
-    // Skip records missing the identity fields we cannot normalize (id, plugin name)
+    // Skip records missing the identity fields we cannot normalize (id, plugin slug)
     // rather than throwing — one malformed connection must not zero out the whole
     // InsightConnect view. Skips are logged so a curator can investigate.
     List<NormalizedIntegration> integrations =
@@ -80,16 +81,16 @@ public class InsightConnectAdapter implements IntegrationAdapter {
   }
 
   /**
-   * Warn when the response carries a {@code metadata.total} greater than the number of connections
+   * Warn when the response carries a {@code data.meta.total} greater than the number of connections
    * actually returned — a signal that ICON paginated and this single-page fetch under-reports.
    * RFC-001 states a single call returns everything for ICON; this tripwire makes a violation of
    * that assumption visible instead of silently truncating. (Paged fetching is a future follow-up.)
    */
   private void warnIfTruncated(ConnectionsResponse response, int returned) {
-    if (response == null || response.metadata() == null) {
+    if (response == null) {
       return;
     }
-    Integer total = response.metadata().total();
+    Integer total = response.total();
     if (total != null && total > returned) {
       log.warn(
           "InsightConnect reported total={} but returned {} connections; "
@@ -101,17 +102,18 @@ public class InsightConnectAdapter implements IntegrationAdapter {
 
   /**
    * A connection is normalizable only if it carries the identity fields the normalized record
-   * requires: a non-blank {@code id} (the integration id) and a non-blank {@code plugin.name} (the
-   * source identifier). Records missing either are skipped with a WARN.
+   * requires: a non-blank {@code id} (the integration id) and a non-blank {@code plugin.slugName}
+   * (the source identifier — komand's canonical plugin slug). Records missing either are skipped
+   * with a WARN.
    */
   private boolean isNormalizable(ConnectionViewModel cvm) {
     if (!StringUtils.hasText(cvm.id())) {
       log.warn("Skipping InsightConnect connection with missing id");
       return false;
     }
-    String pluginName = cvm.plugin() == null ? null : cvm.plugin().name();
-    if (!StringUtils.hasText(pluginName)) {
-      log.warn("Skipping InsightConnect connection '{}' with missing plugin name", cvm.id());
+    String pluginSlug = cvm.plugin() == null ? null : cvm.plugin().slugName();
+    if (!StringUtils.hasText(pluginSlug)) {
+      log.warn("Skipping InsightConnect connection '{}' with missing plugin slug", cvm.id());
       return false;
     }
     return true;
@@ -123,8 +125,12 @@ public class InsightConnectAdapter implements IntegrationAdapter {
       return restClient
           .get()
           .uri(CONNECTIONS_PATH)
-          // T10 integration point: hand-rolled identity-header forwarding for now;
-          // swap for the canonical Class3HeaderAttacher once track 10 lands.
+          // Class 3 Layer B (user identity): forward the inbound X-IPIMS-ORG-ID /
+          // X-IPIMS-USER-ID unchanged — komand's class3 orguser middleware authenticates
+          // on these alone (ADR-004, RFC-001 §Review Q&A). Locally Kong is absent so
+          // Layer A is a no-op. T10 integration point: route Layer A service-identity
+          // headers (X-Api-Service-Key, R7-Consumer, R7-Correlation-Id) through the
+          // canonical Class3HeaderAttacher once track 10 lands.
           .headers(h -> h.addAll(authHeaders))
           .retrieve()
           .body(ConnectionsResponse.class);
@@ -159,15 +165,16 @@ public class InsightConnectAdapter implements IntegrationAdapter {
   }
 
   private NormalizedIntegration normalize(ConnectionViewModel cvm, String orgId) {
-    // id and plugin.name are guaranteed non-blank here by isNormalizable().
+    // id and plugin.slugName are guaranteed non-blank here by isNormalizable().
     String orchestratorStatus = cvm.orchestrator() == null ? null : cvm.orchestrator().status();
-    IntegrationStatus status = statusMapper.deriveStatus(orchestratorStatus, cvm.connectionTests());
-    Instant lastSuccess = statusMapper.deriveLastSuccess(cvm.connectionTests());
-    String pluginName = cvm.plugin().name();
+    List<ConnectionTest> tests = cvm.tests();
+    IntegrationStatus status = statusMapper.deriveStatus(orchestratorStatus, tests);
+    Instant lastSuccess = statusMapper.deriveLastSuccess(tests);
+    String pluginSlug = cvm.plugin().slugName();
 
     return new NormalizedIntegration(
         cvm.id(),
-        new SourceIdentifier(SOURCE_TYPE, pluginName),
+        new SourceIdentifier(SOURCE_TYPE, pluginSlug),
         PRODUCT_NAME,
         INTEGRATION_TYPE,
         null, // integration_label: ICON has no per-instance name

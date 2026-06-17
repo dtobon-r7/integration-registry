@@ -4,9 +4,10 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.List;
 
 /**
- * A single ICON automation connection. Field names match the wire shape exactly ({@code
- * connectionTests}, not {@code connection_test}). {@code configurationUrl} is nullable — today's
- * API does not return it, but the adapter prefers it when present (RFC-001 forward-compat clause).
+ * A single ICON automation connection. Field names match komand's wire shape exactly: the embedded
+ * test array is {@code tests} (verified against live komand: {@code conntest.ConnectionViewModel}
+ * embeds {@code Tests json:"tests"}). {@code configurationUrl} is nullable — today's API does not
+ * return it, but the adapter prefers it when present (RFC-001 forward-compat clause).
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ConnectionViewModel(
@@ -17,5 +18,5 @@ public record ConnectionViewModel(
     Boolean isCloud,
     String createdAt,
     String updatedAt,
-    List<ConnectionTest> connectionTests,
+    List<ConnectionTest> tests,
     String configurationUrl) {}

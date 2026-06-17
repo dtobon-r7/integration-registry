@@ -32,7 +32,7 @@ class InsightConnectAdapterContractTest {
   private static final String BASE_URL = "https://icon.test.local";
   private static final String ICON_BASE = "https://icon.test.local";
   private static final String CONNECTIONS_URL =
-      BASE_URL + "/api/public/v1/connections?includeTests=1";
+      BASE_URL + "/api/class3/v1/connections?includeTests=1";
   private static final String ORG_ID = "org-123";
 
   /**
@@ -102,7 +102,7 @@ class InsightConnectAdapterContractTest {
     NormalizedIntegration n = result.integrations().get(0);
     assertThat(n.status()).isEqualTo(IntegrationStatus.HEALTHY);
     assertThat(n.sourceIdentifier().sourceType()).isEqualTo("plugin_name");
-    assertThat(n.sourceIdentifier().sourceValue()).isEqualTo("jira");
+    assertThat(n.sourceIdentifier().sourceValue()).isEqualTo("rapid7_insightconnect_jira");
     assertThat(n.productName()).isEqualTo("InsightConnect");
     assertThat(n.integrationType()).isEqualTo("Automation Plugin");
     assertThat(n.integrationLabel()).isNull();
@@ -179,7 +179,10 @@ class InsightConnectAdapterContractTest {
     assertThat(result.integrations()).hasSize(3);
     assertThat(result.integrations())
         .extracting(n -> n.sourceIdentifier().sourceValue())
-        .containsExactlyInAnyOrder("jira", "jira", "microsoft-defender");
+        .containsExactlyInAnyOrder(
+            "rapid7_insightconnect_jira",
+            "rapid7_insightconnect_jira",
+            "rapid7_insightconnect_microsoft_defender");
     // The jira/warning/stale/failed connection resolves to ERROR (precedence)
     assertThat(result.integrations())
         .filteredOn(n -> n.integrationId().equals("c1a2b3c4-0002-0002-0002-000000000002"))
@@ -189,8 +192,8 @@ class InsightConnectAdapterContractTest {
   }
 
   @Test
-  void fetch_shouldSkipMalformedRecords_whenIdOrPluginNameMissing() throws Exception {
-    // Arrange — fixture has 1 valid + 2 malformed (null plugin.name, missing id)
+  void fetch_shouldSkipMalformedRecords_whenIdOrPluginSlugNameMissing() throws Exception {
+    // Arrange — fixture has 1 valid + 2 malformed (null plugin.slugName, missing id)
     Harness h = harness();
     stub(h.server(), "malformed-skipped.json");
     // Act
@@ -204,7 +207,7 @@ class InsightConnectAdapterContractTest {
 
   @Test
   void fetch_shouldWarn_whenSkippingMalformedRecord() throws Exception {
-    // Arrange — capture logs; fixture has 2 malformed records (missing id, missing plugin name)
+    // Arrange — capture logs; fixture has 2 malformed records (missing id, missing plugin slug)
     Harness h = harness();
     stub(h.server(), "malformed-skipped.json");
     try (LogCapture logs = captureAdapterLogs()) {
@@ -215,27 +218,27 @@ class InsightConnectAdapterContractTest {
           .filteredOn(e -> e.getLevel() == Level.WARN)
           .extracting(ILoggingEvent::getFormattedMessage)
           .anySatisfy(m -> assertThat(m).contains("missing id"))
-          .anySatisfy(m -> assertThat(m).contains("missing plugin name"));
+          .anySatisfy(m -> assertThat(m).contains("missing plugin slug"));
     }
     h.server().verify();
   }
 
   @Test
-  void fetch_shouldStillReturnConnections_whenMetadataTotalExceedsReturned() throws Exception {
-    // Arrange — metadata.total (5) > data.size() (1): a pagination-truncation signal.
+  void fetch_shouldStillReturnConnections_whenMetaTotalExceedsReturned() throws Exception {
+    // Arrange — data.meta.total (5) > connections.size() (1): a pagination-truncation signal.
     // The adapter logs a WARN but still returns what it got (no throw, no drop).
     Harness h = harness();
     String body =
         """
-            { "data": [ {
+            { "data": { "connections": [ {
                 "id": "c-1",
                 "name": "Jira",
-                "plugin": { "name": "jira", "pluginVendor": "rapid7", "pluginVersion": "11.3.0" },
+                "plugin": { "name": "Jira", "slugName": "rapid7_insightconnect_jira", "pluginVendor": "rapid7", "pluginVersion": "11.3.0" },
                 "orchestrator": { "id": "o", "name": "Orch", "status": "healthy", "version": "3" },
-                "connectionTests": [
+                "tests": [
                     { "id": "ct", "connectionId": "c-1", "status": "success", "isStale": false, "errorMessage": null, "createdAt": "2026-05-19T10:00:00Z" }
                 ]
-            } ], "metadata": { "total": 5 } }
+            } ], "meta": { "total": 5 } } }
             """;
     h.server()
         .expect(requestTo(CONNECTIONS_URL))
@@ -254,16 +257,16 @@ class InsightConnectAdapterContractTest {
     Harness h = harness();
     String body =
         """
-            { "data": [ {
+            { "data": { "connections": [ {
                 "id": "c-9",
                 "name": "Jira With URL",
-                "plugin": { "name": "jira", "pluginVendor": "rapid7", "pluginVersion": "11.3.0" },
+                "plugin": { "name": "Jira", "slugName": "rapid7_insightconnect_jira", "pluginVendor": "rapid7", "pluginVersion": "11.3.0" },
                 "orchestrator": { "id": "o", "name": "Orch", "status": "healthy", "version": "3" },
                 "configurationUrl": "https://custom.example/connections/c-9",
-                "connectionTests": [
+                "tests": [
                     { "id": "ct", "connectionId": "c-9", "status": "success", "isStale": false, "errorMessage": null, "createdAt": "2026-05-19T10:00:00Z" }
                 ]
-            } ], "metadata": { "total": 1 } }
+            } ], "meta": { "total": 1 } } }
             """;
     h.server()
         .expect(requestTo(CONNECTIONS_URL))

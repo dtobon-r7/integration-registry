@@ -1,6 +1,11 @@
+# yaml-language-server: $schema=../schema/v1.json
 # Note: `display_name` fields are required by the JSON Schema (v1) for human
 # readability of the bundle source, but the parser does not propagate them
 # into VendorResolution — that responsibility lives at presentation layers.
+# Note: for InsightConnect (`source_type: plugin_name`) the `source_value` is
+# komand's canonical plugin slug — the `plugin.slugName` field on the Class 3
+# connections response (e.g. `rapid7_insightconnect_jira`), NOT the display
+# title `plugin.name` ("Jira"). The InsightConnectAdapter emits the slug.
 apiVersion: registry.rapid7.com/v1
 kind: VendorMapping
 metadata:
@@ -20,7 +25,7 @@ spec:
               display_name: Microsoft Defender for Endpoint
             - product: InsightConnect
               source_type: plugin_name
-              source_value: microsoft-defender
+              source_value: rapid7_insightconnect_microsoft_defender
               display_name: Microsoft Defender
     - id: atlassian
       name: Atlassian
@@ -31,5 +36,5 @@ spec:
           data_sources:
             - product: InsightConnect
               source_type: plugin_name
-              source_value: jira
+              source_value: rapid7_insightconnect_jira
               display_name: Jira

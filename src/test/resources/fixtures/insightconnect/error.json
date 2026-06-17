@@ -1,14 +1,16 @@
 {
-  "data": [
-    {
-      "id": "c1a2b3c4-0002-0002-0002-000000000002",
-      "name": "Jira Error",
-      "plugin": { "name": "jira", "pluginVendor": "rapid7", "pluginVersion": "11.3.0" },
-      "orchestrator": { "id": "orch-1", "name": "Cloud Orchestrator", "status": "healthy", "version": "3.1.4" },
-      "connectionTests": [
-        { "id": "ct-2", "connectionId": "c1a2b3c4-0002-0002-0002-000000000002", "status": "failed", "isStale": false, "errorMessage": "boom", "createdAt": "2026-05-19T10:00:00Z" }
-      ]
-    }
-  ],
-  "metadata": { "total": 1 }
+  "data": {
+    "connections": [
+      {
+        "id": "c1a2b3c4-0002-0002-0002-000000000002",
+        "name": "Jira Error",
+        "plugin": { "name": "Jira", "slugName": "rapid7_insightconnect_jira", "pluginVendor": "rapid7", "pluginVersion": "11.3.0" },
+        "orchestrator": { "id": "orch-1", "name": "Cloud Orchestrator", "status": "healthy", "version": "3.1.4" },
+        "tests": [
+          { "id": "ct-2", "connectionId": "c1a2b3c4-0002-0002-0002-000000000002", "status": "failed", "isStale": false, "errorMessage": "boom", "createdAt": "2026-05-19T10:00:00Z" }
+        ]
+      }
+    ],
+    "meta": { "total": 1 }
+  }
 }
