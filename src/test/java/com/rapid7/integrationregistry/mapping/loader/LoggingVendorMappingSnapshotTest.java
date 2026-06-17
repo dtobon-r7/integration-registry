@@ -7,6 +7,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.rapid7.integrationregistry.mapping.DataSourceResolution;
 import com.rapid7.integrationregistry.mapping.ProductName;
 import com.rapid7.integrationregistry.mapping.SourceType;
 import com.rapid7.integrationregistry.mapping.VendorCategory;
@@ -48,14 +49,14 @@ class LoggingVendorMappingSnapshotTest {
     // Arrange
     LoggingVendorMappingSnapshot decorator =
         new LoggingVendorMappingSnapshot(
-            StubVendorMappingSnapshot.returning("v1.0.0", VendorResolution.unknown()));
+            StubVendorMappingSnapshot.returning("v1.0.0", DataSourceResolution.unknown()));
 
     // Act
-    VendorResolution result =
+    DataSourceResolution result =
         decorator.lookup(ProductName.INSIGHT_IDR, SourceType.PRODUCT_TYPE, "mystery-source");
 
     // Assert
-    assertThat(result).isSameAs(VendorResolution.unknown());
+    assertThat(result).isSameAs(DataSourceResolution.unknown());
     assertThat(appender.list).hasSize(1);
     ILoggingEvent event = appender.list.get(0);
     assertThat(event.getLevel()).isEqualTo(Level.WARN);
@@ -78,16 +79,17 @@ class LoggingVendorMappingSnapshotTest {
             VendorCategory.EDR,
             "microsoft",
             "Microsoft");
+    DataSourceResolution knownDsr = new DataSourceResolution(known, "Microsoft Defender");
     LoggingVendorMappingSnapshot decorator =
-        new LoggingVendorMappingSnapshot(StubVendorMappingSnapshot.returning("v1.0.0", known));
+        new LoggingVendorMappingSnapshot(StubVendorMappingSnapshot.returning("v1.0.0", knownDsr));
 
     // Act
-    VendorResolution result =
+    DataSourceResolution result =
         decorator.lookup(
             ProductName.INSIGHT_IDR, SourceType.PRODUCT_TYPE, "microsoft-defender-endpoint");
 
     // Assert
-    assertThat(result).isSameAs(known);
+    assertThat(result).isSameAs(knownDsr);
     assertThat(appender.list).isEmpty();
   }
 
@@ -96,7 +98,7 @@ class LoggingVendorMappingSnapshotTest {
     // Arrange
     LoggingVendorMappingSnapshot decorator =
         new LoggingVendorMappingSnapshot(
-            StubVendorMappingSnapshot.returning("v1.42.0", VendorResolution.unknown()));
+            StubVendorMappingSnapshot.returning("v1.42.0", DataSourceResolution.unknown()));
 
     // Act
     String version = decorator.mappingVersion();

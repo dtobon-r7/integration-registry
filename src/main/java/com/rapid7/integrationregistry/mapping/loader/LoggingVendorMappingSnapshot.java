@@ -1,5 +1,6 @@
 package com.rapid7.integrationregistry.mapping.loader;
 
+import com.rapid7.integrationregistry.mapping.DataSourceResolution;
 import com.rapid7.integrationregistry.mapping.ProductName;
 import com.rapid7.integrationregistry.mapping.SourceType;
 import com.rapid7.integrationregistry.mapping.VendorMappingSnapshot;
@@ -28,17 +29,17 @@ final class LoggingVendorMappingSnapshot implements VendorMappingSnapshot {
     this.mappingVersion = delegate.mappingVersion();
   }
 
-  // Identity check on VendorResolution.unknown(): the snapshot returns the
-  // unknown() singleton for unmapped triplets, so reference equality is
-  // sufficient and avoids a 5-field record-equals on the per-request hot path.
-  // PMD's CompareObjectsWithEquals can't see the singleton invariant, so we
-  // suppress locally.
+  // Identity check on VendorResolution.unknown(): the snapshot returns a
+  // DataSourceResolution whose identity is the unknown() singleton for unmapped
+  // triplets, so reference equality on the identity is sufficient and avoids a
+  // record-equals on the per-request hot path. PMD's CompareObjectsWithEquals
+  // can't see the singleton invariant, so we suppress locally.
   @SuppressWarnings("PMD.CompareObjectsWithEquals")
   @Override
-  public VendorResolution lookup(
+  public DataSourceResolution lookup(
       ProductName productName, SourceType sourceType, String sourceValue) {
-    VendorResolution resolution = delegate.lookup(productName, sourceType, sourceValue);
-    if (resolution == VendorResolution.unknown()) {
+    DataSourceResolution resolution = delegate.lookup(productName, sourceType, sourceValue);
+    if (resolution.identity() == VendorResolution.unknown()) {
       log.warn(
           "Unknown vendor mapping triplet: product={}, source_type={}, source_value={} (mapping_version={})",
           productName,

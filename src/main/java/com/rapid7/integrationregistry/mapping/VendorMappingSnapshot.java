@@ -5,11 +5,11 @@ public interface VendorMappingSnapshot {
   /**
    * Resolve a raw product source identifier to its canonical vendor / vendor-service identity.
    *
-   * @return resolution result for known triplets, or {@link VendorResolution#unknown()} for
+   * @return resolution result for known triplets, or {@link DataSourceResolution#unknown()} for
    *     unmapped triplets — never null, never throws on unmapped input.
    * @throws NullPointerException if any argument is null
    */
-  VendorResolution lookup(ProductName productName, SourceType sourceType, String sourceValue);
+  DataSourceResolution lookup(ProductName productName, SourceType sourceType, String sourceValue);
 
   /**
    * The {@code metadata.mapping_version} of the loaded bundle (semver string, e.g. {@code

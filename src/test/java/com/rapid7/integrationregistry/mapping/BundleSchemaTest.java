@@ -179,4 +179,14 @@ class BundleSchemaTest {
     assertThat(errors).isNotEmpty();
     assertThat(errors).anyMatch(m -> m.getInstanceLocation().toString().contains(".source_value"));
   }
+
+  @Test
+  void validate_shouldReject_whenDisplayNameMissing() throws IOException {
+    // Arrange / Act
+    Set<ValidationMessage> errors = validateFixture("invalid-missing-display-name.json");
+
+    // Assert — display_name is required on every data source
+    assertThat(errors).isNotEmpty();
+    assertThat(errors).anyMatch(m -> m.getMessage().contains("display_name"));
+  }
 }

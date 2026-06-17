@@ -122,7 +122,7 @@ public final class BundleParser {
 
   private VendorMappingSnapshot buildSnapshot(JsonNode tree) {
     String mappingVersion = tree.at("/metadata/mapping_version").asString();
-    Map<Object, VendorResolution> index = new HashMap<>();
+    Map<Object, DataSourceResolution> index = new HashMap<>();
     for (JsonNode vendor : tree.at("/spec/vendors")) {
       String vendorId = vendor.get("id").asString();
       String vendorName = vendor.get("name").asString();
@@ -154,10 +154,14 @@ public final class BundleParser {
                   "source_type",
                   ds.get("source_type").asString());
           String sourceValue = ds.get("source_value").asString();
-          VendorResolution resolution =
+          // display_name is schema-required (minLength 1) and validation has already run by the
+          // time buildSnapshot is reached, so the node is present and non-blank — no fallback.
+          String displayName = ds.get("display_name").asString();
+          VendorResolution identity =
               new VendorResolution(serviceId, serviceName, category, vendorId, vendorName);
           index.put(
-              MapBackedVendorMappingSnapshot.key(product, sourceType, sourceValue), resolution);
+              MapBackedVendorMappingSnapshot.key(product, sourceType, sourceValue),
+              new DataSourceResolution(identity, displayName));
         }
       }
     }

@@ -8,11 +8,11 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.rapid7.integrationregistry.mapping.DataSourceResolution;
 import com.rapid7.integrationregistry.mapping.ProductName;
 import com.rapid7.integrationregistry.mapping.SourceType;
 import com.rapid7.integrationregistry.mapping.VendorCategory;
 import com.rapid7.integrationregistry.mapping.VendorMappingSnapshot;
-import com.rapid7.integrationregistry.mapping.VendorResolution;
 import com.rapid7.integrationregistry.testsupport.BundleArchiveBuilder;
 import com.rapid7.integrationregistry.testsupport.S3TestFixtures;
 import java.io.IOException;
@@ -182,35 +182,36 @@ class VendorMappingBootIntegrationTest {
     @Test
     void snapshot_shouldResolveAllFourMvpTriplets() {
       // Microsoft Defender via InsightIDR
-      VendorResolution idrDefender =
+      DataSourceResolution idrDefender =
           vendorMappingSnapshot.lookup(
               ProductName.INSIGHT_IDR, SourceType.PRODUCT_TYPE, "microsoft-defender-endpoint");
-      assertThat(idrDefender.vendorServiceId()).isEqualTo("microsoft-defender");
-      assertThat(idrDefender.vendorServiceName()).isEqualTo("Microsoft Defender");
-      assertThat(idrDefender.vendorCategory()).isEqualTo(VendorCategory.EDR);
-      assertThat(idrDefender.vendorId()).isEqualTo("microsoft");
-      assertThat(idrDefender.vendorName()).isEqualTo("Microsoft");
+      assertThat(idrDefender.identity().vendorServiceId()).isEqualTo("microsoft-defender");
+      assertThat(idrDefender.identity().vendorServiceName()).isEqualTo("Microsoft Defender");
+      assertThat(idrDefender.identity().vendorCategory()).isEqualTo(VendorCategory.EDR);
+      assertThat(idrDefender.identity().vendorId()).isEqualTo("microsoft");
+      assertThat(idrDefender.identity().vendorName()).isEqualTo("Microsoft");
+      assertThat(idrDefender.displayName()).isEqualTo("Microsoft Defender for Endpoint");
 
       // Microsoft Defender via InsightConnect (source_value is komand's plugin slug)
-      VendorResolution iconDefender =
+      DataSourceResolution iconDefender =
           vendorMappingSnapshot.lookup(
               ProductName.INSIGHT_CONNECT,
               SourceType.PLUGIN_NAME,
               "rapid7_insightconnect_microsoft_defender");
-      assertThat(iconDefender.vendorServiceId()).isEqualTo("microsoft-defender");
+      assertThat(iconDefender.identity().vendorServiceId()).isEqualTo("microsoft-defender");
 
       // Jira via InsightConnect (source_value is komand's plugin slug)
-      VendorResolution jira =
+      DataSourceResolution jira =
           vendorMappingSnapshot.lookup(
               ProductName.INSIGHT_CONNECT, SourceType.PLUGIN_NAME, "rapid7_insightconnect_jira");
-      assertThat(jira.vendorServiceId()).isEqualTo("jira");
-      assertThat(jira.vendorId()).isEqualTo("atlassian");
+      assertThat(jira.identity().vendorServiceId()).isEqualTo("jira");
+      assertThat(jira.identity().vendorId()).isEqualTo("atlassian");
 
       // Negative control: unmapped triplet returns the synthetic record.
-      VendorResolution mystery =
+      DataSourceResolution mystery =
           vendorMappingSnapshot.lookup(
               ProductName.INSIGHT_IDR, SourceType.PRODUCT_TYPE, "no-such-source");
-      assertThat(mystery).isSameAs(VendorResolution.unknown());
+      assertThat(mystery).isSameAs(DataSourceResolution.unknown());
     }
 
     @Test

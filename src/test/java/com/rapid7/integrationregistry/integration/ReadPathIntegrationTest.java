@@ -5,11 +5,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.rapid7.integrationregistry.adapter.IntegrationStatus;
 import com.rapid7.integrationregistry.adapter.exception.AdapterAuthException;
 import com.rapid7.integrationregistry.adapter.exception.AdapterUpstreamException;
+import com.rapid7.integrationregistry.controller.dto.DataSourceDto;
 import com.rapid7.integrationregistry.controller.dto.HealthState;
 import com.rapid7.integrationregistry.controller.dto.UnavailableProductDto;
 import com.rapid7.integrationregistry.controller.dto.UnavailableReason;
 import com.rapid7.integrationregistry.controller.dto.VendorDetailResponse;
 import com.rapid7.integrationregistry.controller.dto.VendorServiceCardNestedDto;
+import com.rapid7.integrationregistry.controller.dto.VendorServiceDetailResponse;
 import com.rapid7.integrationregistry.controller.dto.VendorServicesResponse;
 import com.rapid7.integrationregistry.coordinator.FanOutCoordinator;
 import java.time.Instant;
@@ -271,5 +273,40 @@ class ReadPathIntegrationTest extends ReadPathTestSupport {
         .filteredOn(s -> s.vendorServiceId().equals("microsoft-defender"))
         .singleElement()
         .satisfies(s -> assertThat(s.aggregateHealth()).isEqualTo(HealthState.HEALTHY));
+  }
+
+  @Test
+  void getVendorServiceDetail_shouldRenderCuratedDisplayNames_whenDefenderHasTwoDataSources() {
+    // Arrange — Microsoft Defender via IDR + ICON. The two triplets resolve to the SAME vendor
+    // service but distinct data sources with distinct curated display names in the test bundle.
+    Instant fetchedAt = Instant.parse("2026-06-02T08:00:00Z");
+    insightIdrAdapter.willReturn(
+        fetchResult(
+            fetchedAt,
+            integration(
+                INSIGHT_IDR,
+                "product_type",
+                "microsoft-defender-endpoint",
+                IntegrationStatus.HEALTHY)));
+    insightConnectAdapter.willReturn(
+        fetchResult(
+            fetchedAt,
+            integration(
+                INSIGHT_CONNECT, "plugin_name", "microsoft-defender", IntegrationStatus.HEALTHY)));
+
+    // Act — assert 200 explicitly so a future 404 fails cleanly rather than throwing.
+    ResponseEntity<VendorServiceDetailResponse> response =
+        get("/integration-registry/v1/vendor-services/microsoft-defender")
+            .retrieve()
+            .toEntity(VendorServiceDetailResponse.class);
+    assertThat(response.getStatusCode().value()).isEqualTo(200);
+    VendorServiceDetailResponse body = response.getBody();
+    assertThat(body).isNotNull();
+
+    // Assert — the expanded data-source rows carry the curated labels, NOT the raw source slugs.
+    assertThat(body.vendorServiceId()).isEqualTo("microsoft-defender");
+    assertThat(body.dataSources())
+        .extracting(DataSourceDto::displayName)
+        .containsExactlyInAnyOrder("Microsoft Defender for Endpoint", "Microsoft Defender");
   }
 }
