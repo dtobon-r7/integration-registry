@@ -83,6 +83,7 @@ class S3VendorMappingBundleLoaderTest {
             snapshot
                 .lookup(
                     ProductName.INSIGHT_IDR, SourceType.PRODUCT_TYPE, "microsoft-defender-endpoint")
+                .identity()
                 .vendorServiceId())
         .isEqualTo("microsoft-defender");
     verify(s3Client, never())

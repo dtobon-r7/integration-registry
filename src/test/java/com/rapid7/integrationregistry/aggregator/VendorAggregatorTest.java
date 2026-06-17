@@ -555,12 +555,14 @@ class VendorAggregatorTest {
                   ProductName.INSIGHT_IDR,
                   SourceType.PRODUCT_TYPE,
                   "microsoft-defender-endpoint",
-                  MS_DEFENDER)
+                  MS_DEFENDER,
+                  "Microsoft Defender for Endpoint")
               .map(
                   ProductName.INSIGHT_CONNECT,
                   SourceType.PLUGIN_NAME,
                   "microsoft-defender",
-                  MS_DEFENDER)
+                  MS_DEFENDER,
+                  "Microsoft Defender")
               .build();
       List<NormalizedIntegration> instances =
           List.of(
@@ -597,13 +599,13 @@ class VendorAggregatorTest {
       // Canonical data_source_id locked here — RFC §data_source_id construction
       assertThat(idrDs.dataSourceId())
           .isEqualTo("insightidr|product_type|microsoft-defender-endpoint");
-      assertThat(idrDs.displayName()).isEqualTo("microsoft-defender-endpoint");
+      assertThat(idrDs.displayName()).isEqualTo("Microsoft Defender for Endpoint");
       assertThat(idrDs.integrationsCount()).isEqualTo(2);
       assertThat(idrDs.status()).isEqualTo(IntegrationStatus.ERROR);
       assertThat(idrDs.integrations()).hasSize(2);
 
       assertThat(iconDs.dataSourceId()).isEqualTo("insightconnect|plugin_name|microsoft-defender");
-      assertThat(iconDs.displayName()).isEqualTo("microsoft-defender");
+      assertThat(iconDs.displayName()).isEqualTo("Microsoft Defender");
       assertThat(iconDs.integrationsCount()).isEqualTo(1);
       assertThat(iconDs.status()).isEqualTo(IntegrationStatus.HEALTHY);
     }
@@ -631,7 +633,8 @@ class VendorAggregatorTest {
       assertThat(detail.vendorServiceId()).isEqualTo("unknown");
       assertThat(detail.dataSources()).hasSize(3);
       assertThat(detail.aggregateHealth()).isEqualTo(IntegrationStatus.ERROR);
-      // Each DS preserves its raw triplet in data_source_id and uses sourceValue as displayName
+      // Each DS preserves its raw triplet in data_source_id; unmapped displayName is the fixed
+      // "Unknown"
       assertThat(detail.dataSources())
           .extracting(DataSourceDetail::dataSourceId)
           .containsExactlyInAnyOrder(
@@ -640,7 +643,7 @@ class VendorAggregatorTest {
               "insightconnect|plugin_name|new-product-c");
       assertThat(detail.dataSources())
           .extracting(DataSourceDetail::displayName)
-          .containsExactlyInAnyOrder("new-product-a", "new-product-b", "new-product-c");
+          .containsExactly("Unknown", "Unknown", "Unknown");
     }
   }
 

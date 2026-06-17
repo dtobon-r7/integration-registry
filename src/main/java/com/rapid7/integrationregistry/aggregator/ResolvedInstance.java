@@ -10,9 +10,10 @@ import java.util.Objects;
  * VendorResolution} (real or {@link VendorResolution#unknown()}), and the per-data-source {@code
  * displayName}.
  *
- * <p>Per the spec's {@code displayName} gap: {@code displayName} is the raw {@code sourceValue} for
- * both mapped and unmapped triplets until the snapshot surfaces curated bundle {@code display_name}
- * values.
+ * <p>{@code displayName} carries the curated, data-source-level {@code display_name} from the
+ * vendor-mapping bundle for mapped triplets, and the fixed label {@code "Unknown"} for unmapped
+ * triplets (via {@link com.rapid7.integrationregistry.mapping.DataSourceResolution#unknown()}). It
+ * is never the raw {@code sourceValue}.
  *
  * <p>Package-private — internal contract between resolution and projection stages of {@code
  * VendorAggregator}, never surfaced on the public API.

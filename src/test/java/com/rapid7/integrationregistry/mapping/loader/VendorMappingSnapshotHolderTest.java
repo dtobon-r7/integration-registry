@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
+import com.rapid7.integrationregistry.mapping.DataSourceResolution;
 import com.rapid7.integrationregistry.mapping.ProductName;
 import com.rapid7.integrationregistry.mapping.SourceType;
 import com.rapid7.integrationregistry.mapping.VendorCategory;
@@ -39,17 +40,19 @@ class VendorMappingSnapshotHolderTest {
   void lookup_shouldDelegate_whenSet() {
     // Arrange
     VendorMappingSnapshotHolder holder = new VendorMappingSnapshotHolder();
-    VendorResolution expected =
-        new VendorResolution(
-            "microsoft-defender",
-            "Microsoft Defender",
-            VendorCategory.EDR,
-            "microsoft",
-            "Microsoft");
+    DataSourceResolution expected =
+        new DataSourceResolution(
+            new VendorResolution(
+                "microsoft-defender",
+                "Microsoft Defender",
+                VendorCategory.EDR,
+                "microsoft",
+                "Microsoft"),
+            "Microsoft Defender for Endpoint");
     holder.set(StubVendorMappingSnapshot.returning("v1.0.0", expected));
 
     // Act
-    VendorResolution actual =
+    DataSourceResolution actual =
         holder.lookup(ProductName.INSIGHT_IDR, SourceType.PRODUCT_TYPE, "any-value");
 
     // Assert
@@ -60,7 +63,7 @@ class VendorMappingSnapshotHolderTest {
   void mappingVersion_shouldDelegate_whenSet() {
     // Arrange
     VendorMappingSnapshotHolder holder = new VendorMappingSnapshotHolder();
-    holder.set(StubVendorMappingSnapshot.returning("v9.9.9", VendorResolution.unknown()));
+    holder.set(StubVendorMappingSnapshot.returning("v9.9.9", DataSourceResolution.unknown()));
 
     // Act
     String version = holder.mappingVersion();
@@ -73,14 +76,14 @@ class VendorMappingSnapshotHolderTest {
   void set_shouldThrowIllegalState_whenAlreadySet() {
     // Arrange
     VendorMappingSnapshotHolder holder = new VendorMappingSnapshotHolder();
-    holder.set(StubVendorMappingSnapshot.returning("v1.0.0", VendorResolution.unknown()));
+    holder.set(StubVendorMappingSnapshot.returning("v1.0.0", DataSourceResolution.unknown()));
 
     // Act / Assert
     assertThatExceptionOfType(IllegalStateException.class)
         .isThrownBy(
             () ->
                 holder.set(
-                    StubVendorMappingSnapshot.returning("v2.0.0", VendorResolution.unknown())))
+                    StubVendorMappingSnapshot.returning("v2.0.0", DataSourceResolution.unknown())))
         .withMessageContaining("already set");
   }
 
@@ -106,7 +109,7 @@ class VendorMappingSnapshotHolderTest {
   void isLoaded_shouldReturnTrue_whenSet() {
     // Arrange
     VendorMappingSnapshotHolder holder = new VendorMappingSnapshotHolder();
-    holder.set(StubVendorMappingSnapshot.returning("v1.0.0", VendorResolution.unknown()));
+    holder.set(StubVendorMappingSnapshot.returning("v1.0.0", DataSourceResolution.unknown()));
 
     // Act / Assert
     assertThat(holder.isLoaded()).isTrue();

@@ -1,9 +1,9 @@
 package com.rapid7.integrationregistry.mapping.loader;
 
+import com.rapid7.integrationregistry.mapping.DataSourceResolution;
 import com.rapid7.integrationregistry.mapping.ProductName;
 import com.rapid7.integrationregistry.mapping.SourceType;
 import com.rapid7.integrationregistry.mapping.VendorMappingSnapshot;
-import com.rapid7.integrationregistry.mapping.VendorResolution;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -41,7 +41,7 @@ final class VendorMappingSnapshotHolder implements VendorMappingSnapshot {
   }
 
   @Override
-  public VendorResolution lookup(
+  public DataSourceResolution lookup(
       ProductName productName, SourceType sourceType, String sourceValue) {
     return current().lookup(productName, sourceType, sourceValue);
   }

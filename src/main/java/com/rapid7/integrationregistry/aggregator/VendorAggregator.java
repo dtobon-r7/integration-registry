@@ -9,6 +9,7 @@ import com.rapid7.integrationregistry.aggregator.projection.VendorCard;
 import com.rapid7.integrationregistry.aggregator.projection.VendorScopedView;
 import com.rapid7.integrationregistry.aggregator.projection.VendorServiceCard;
 import com.rapid7.integrationregistry.aggregator.projection.VendorServiceDetail;
+import com.rapid7.integrationregistry.mapping.DataSourceResolution;
 import com.rapid7.integrationregistry.mapping.ProductName;
 import com.rapid7.integrationregistry.mapping.SourceType;
 import com.rapid7.integrationregistry.mapping.VendorCategory;
@@ -218,22 +219,24 @@ public final class VendorAggregator {
     // The two branches below mint via the enum overload (when fromWireForm resolves) and
     // the String overload (when it doesn't); the resulting dataSourceId is byte-identical.
     if (productEnum.isPresent() && sourceTypeEnum.isPresent()) {
-      VendorResolution resolution =
+      DataSourceResolution resolution =
           snapshot.lookup(productEnum.get(), sourceTypeEnum.get(), sourceValue);
       String dataSourceId =
           DataSourceIdMinter.mint(rawProductName, sourceTypeEnum.get(), sourceValue);
-      if (Objects.equals(resolution, VendorResolution.unknown())) {
+      if (Objects.equals(resolution.identity(), VendorResolution.unknown())) {
         warnOnceForTriplet(rawProductName, rawSourceType, sourceValue, warned);
       }
-      // displayName == sourceValue is intentional per spec §displayName gap (deferred-scope ruling)
-      return new ResolvedInstance(n, dataSourceId, resolution, sourceValue);
+      // displayName is the curated, data-source-level bundle label (or "Unknown" for unmapped
+      // triplets via DataSourceResolution.unknown()) — never the raw sourceValue.
+      return new ResolvedInstance(n, dataSourceId, resolution.identity(), resolution.displayName());
     }
 
-    // Unmappable enum strings — route through the same unknown path.
-    VendorResolution resolution = VendorResolution.unknown();
+    // Unmappable enum strings — route through the same unknown path. displayName is the fixed
+    // "Unknown" label (DataSourceResolution.unknown()), never the raw sourceValue.
+    DataSourceResolution resolution = DataSourceResolution.unknown();
     String dataSourceId = DataSourceIdMinter.mint(rawProductName, rawSourceType, sourceValue);
     warnOnceForTriplet(rawProductName, rawSourceType, sourceValue, warned);
-    return new ResolvedInstance(n, dataSourceId, resolution, sourceValue);
+    return new ResolvedInstance(n, dataSourceId, resolution.identity(), resolution.displayName());
   }
 
   private void warnOnceForTriplet(

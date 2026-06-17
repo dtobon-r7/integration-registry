@@ -28,7 +28,7 @@ import java.util.Objects;
  */
 public final class MapBackedSnapshotBuilder {
 
-  private final Map<Object, VendorResolution> index = new HashMap<>();
+  private final Map<Object, DataSourceResolution> index = new HashMap<>();
   private final String mappingVersion;
 
   private MapBackedSnapshotBuilder(String mappingVersion) {
@@ -39,13 +39,31 @@ public final class MapBackedSnapshotBuilder {
     return new MapBackedSnapshotBuilder(mappingVersion);
   }
 
+  /**
+   * Map a triplet, defaulting the data-source {@code displayName} to the identity's vendor-service
+   * name — convenience for tests that do not assert on display names.
+   */
   public MapBackedSnapshotBuilder map(
       ProductName productName,
       SourceType sourceType,
       String sourceValue,
-      VendorResolution resolution) {
-    Objects.requireNonNull(resolution, "resolution");
-    index.put(MapBackedVendorMappingSnapshot.key(productName, sourceType, sourceValue), resolution);
+      VendorResolution identity) {
+    Objects.requireNonNull(identity, "identity");
+    return map(productName, sourceType, sourceValue, identity, identity.vendorServiceName());
+  }
+
+  /** Map a triplet with an explicit curated {@code displayName}. */
+  public MapBackedSnapshotBuilder map(
+      ProductName productName,
+      SourceType sourceType,
+      String sourceValue,
+      VendorResolution identity,
+      String displayName) {
+    Objects.requireNonNull(identity, "identity");
+    Objects.requireNonNull(displayName, "displayName");
+    index.put(
+        MapBackedVendorMappingSnapshot.key(productName, sourceType, sourceValue),
+        new DataSourceResolution(identity, displayName));
     return this;
   }
 

@@ -40,14 +40,15 @@ class BundleParserTest {
 
     // Assert
     assertThat(snapshot.mappingVersion()).isEqualTo("v1.0.0");
-    VendorResolution resolution =
+    DataSourceResolution resolution =
         snapshot.lookup(
             ProductName.INSIGHT_IDR, SourceType.PRODUCT_TYPE, "microsoft-defender-endpoint");
-    assertThat(resolution.vendorServiceId()).isEqualTo("microsoft-defender");
-    assertThat(resolution.vendorServiceName()).isEqualTo("Microsoft Defender");
-    assertThat(resolution.vendorCategory()).isEqualTo(VendorCategory.EDR);
-    assertThat(resolution.vendorId()).isEqualTo("microsoft");
-    assertThat(resolution.vendorName()).isEqualTo("Microsoft");
+    assertThat(resolution.identity().vendorServiceId()).isEqualTo("microsoft-defender");
+    assertThat(resolution.identity().vendorServiceName()).isEqualTo("Microsoft Defender");
+    assertThat(resolution.identity().vendorCategory()).isEqualTo(VendorCategory.EDR);
+    assertThat(resolution.identity().vendorId()).isEqualTo("microsoft");
+    assertThat(resolution.identity().vendorName()).isEqualTo("Microsoft");
+    assertThat(resolution.displayName()).isEqualTo("Microsoft Defender for Endpoint");
   }
 
   @Test
@@ -107,11 +108,11 @@ class BundleParserTest {
     try (InputStream stream = openFixture("valid-minimal.yaml")) {
       snapshot = parser.parse(stream);
     }
-    VendorResolution result =
+    DataSourceResolution result =
         snapshot.lookup(ProductName.INSIGHT_CONNECT, SourceType.PLUGIN_NAME, "not-in-the-bundle");
 
     // Assert
-    assertThat(result).isSameAs(VendorResolution.unknown());
+    assertThat(result).isSameAs(DataSourceResolution.unknown());
   }
 
   @Test
@@ -136,6 +137,6 @@ class BundleParserTest {
     // Assert
     assertThat(snapshot.mappingVersion()).isEqualTo("v9.9.9");
     assertThat(snapshot.lookup(ProductName.INSIGHT_IDR, SourceType.PRODUCT_TYPE, "anything"))
-        .isSameAs(VendorResolution.unknown());
+        .isSameAs(DataSourceResolution.unknown());
   }
 }

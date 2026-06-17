@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../schema/v1.json
-# Note: `display_name` fields are required by the JSON Schema (v1) for human
-# readability of the bundle source, but the parser does not propagate them
-# into VendorResolution — that responsibility lives at presentation layers.
+# Note: `display_name` fields are required by the JSON Schema (v1). The parser
+# propagates each one into the snapshot via DataSourceResolution (identity +
+# displayName); the aggregator surfaces it as the expanded data-source row label.
 # Note: for InsightConnect (`source_type: plugin_name`) the `source_value` is
 # komand's canonical plugin slug — the `plugin.slugName` field on the Class 3
 # connections response (e.g. `rapid7_insightconnect_jira`), NOT the display

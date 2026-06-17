@@ -26,22 +26,23 @@ final class MapBackedVendorMappingSnapshot implements VendorMappingSnapshot {
     }
   }
 
-  private final Map<TripletKey, VendorResolution> index;
+  private final Map<TripletKey, DataSourceResolution> index;
   private final String mappingVersion;
 
-  MapBackedVendorMappingSnapshot(Map<TripletKey, VendorResolution> index, String mappingVersion) {
+  MapBackedVendorMappingSnapshot(
+      Map<TripletKey, DataSourceResolution> index, String mappingVersion) {
     Objects.requireNonNull(index, FIELD_INDEX);
     this.index = Map.copyOf(index);
     this.mappingVersion = Objects.requireNonNull(mappingVersion, FIELD_MAPPING_VERSION);
   }
 
   @Override
-  public VendorResolution lookup(
+  public DataSourceResolution lookup(
       ProductName productName, SourceType sourceType, String sourceValue) {
     // Null validation lives in TripletKey's compact constructor (same FIELD_*
     // messages); duplicating the guards here would just deepen the stack frame.
     return index.getOrDefault(
-        new TripletKey(productName, sourceType, sourceValue), VendorResolution.unknown());
+        new TripletKey(productName, sourceType, sourceValue), DataSourceResolution.unknown());
   }
 
   @Override

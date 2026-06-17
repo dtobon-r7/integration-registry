@@ -11,15 +11,21 @@ class MapBackedVendorMappingSnapshotTest {
 
   private static final String MAPPING_VERSION = "v1.0.0";
 
-  private static VendorResolution sampleResolution() {
-    return new VendorResolution(
-        "microsoft-defender", "Microsoft Defender", VendorCategory.EDR, "microsoft", "Microsoft");
+  private static DataSourceResolution sampleResolution() {
+    return new DataSourceResolution(
+        new VendorResolution(
+            "microsoft-defender",
+            "Microsoft Defender",
+            VendorCategory.EDR,
+            "microsoft",
+            "Microsoft"),
+        "Microsoft Defender for Endpoint");
   }
 
-  private static Map<Object, VendorResolution> oneEntryIndex(VendorResolution resolution) {
+  private static Map<Object, DataSourceResolution> oneEntryIndex(DataSourceResolution resolution) {
     // The TripletKey type is private to MapBackedVendorMappingSnapshot;
     // construct keys via the package-private key(...) factory.
-    Map<Object, VendorResolution> raw = new HashMap<>();
+    Map<Object, DataSourceResolution> raw = new HashMap<>();
     raw.put(
         MapBackedVendorMappingSnapshot.key(
             ProductName.INSIGHT_IDR, SourceType.PRODUCT_TYPE, "microsoft-defender-endpoint"),
@@ -29,8 +35,8 @@ class MapBackedVendorMappingSnapshotTest {
 
   @SuppressWarnings({"unchecked", "rawtypes"})
   private static MapBackedVendorMappingSnapshot construct(
-      Map<Object, VendorResolution> rawIndex, String version) {
-    // The constructor's Map<TripletKey, VendorResolution> parameter is reachable
+      Map<Object, DataSourceResolution> rawIndex, String version) {
+    // The constructor's Map<TripletKey, DataSourceResolution> parameter is reachable
     // from this same package; use a raw type to bridge our test-side Object key map
     // (which actually holds TripletKey instances minted by key(...)).
     return new MapBackedVendorMappingSnapshot((Map) rawIndex, version);
@@ -39,11 +45,11 @@ class MapBackedVendorMappingSnapshotTest {
   @Test
   void lookup_shouldReturnIndexedResolution_whenTripletPresent() {
     // Arrange
-    VendorResolution resolution = sampleResolution();
+    DataSourceResolution resolution = sampleResolution();
     MapBackedVendorMappingSnapshot snapshot = construct(oneEntryIndex(resolution), MAPPING_VERSION);
 
     // Act
-    VendorResolution result =
+    DataSourceResolution result =
         snapshot.lookup(
             ProductName.INSIGHT_IDR, SourceType.PRODUCT_TYPE, "microsoft-defender-endpoint");
 
@@ -58,11 +64,11 @@ class MapBackedVendorMappingSnapshotTest {
         construct(oneEntryIndex(sampleResolution()), MAPPING_VERSION);
 
     // Act
-    VendorResolution result =
+    DataSourceResolution result =
         snapshot.lookup(ProductName.INSIGHT_CONNECT, SourceType.PLUGIN_NAME, "not-in-the-index");
 
     // Assert
-    assertThat(result).isSameAs(VendorResolution.unknown());
+    assertThat(result).isSameAs(DataSourceResolution.unknown());
   }
 
   @Test
@@ -72,10 +78,10 @@ class MapBackedVendorMappingSnapshotTest {
         construct(oneEntryIndex(sampleResolution()), MAPPING_VERSION);
 
     // Act
-    VendorResolution first =
+    DataSourceResolution first =
         snapshot.lookup(
             ProductName.INSIGHT_IDR, SourceType.PRODUCT_TYPE, "microsoft-defender-endpoint");
-    VendorResolution second =
+    DataSourceResolution second =
         snapshot.lookup(
             ProductName.INSIGHT_IDR, SourceType.PRODUCT_TYPE, "microsoft-defender-endpoint");
 
@@ -151,10 +157,12 @@ class MapBackedVendorMappingSnapshotTest {
   @Test
   void constructor_shouldDefensivelyCopy_whenMutatingSourceMapAfterConstruction() {
     // Arrange
-    Map<Object, VendorResolution> sourceMap = oneEntryIndex(sampleResolution());
+    Map<Object, DataSourceResolution> sourceMap = oneEntryIndex(sampleResolution());
     MapBackedVendorMappingSnapshot snapshot = construct(sourceMap, MAPPING_VERSION);
-    VendorResolution otherResolution =
-        new VendorResolution("jira", "Jira", VendorCategory.ITSM, "atlassian", "Atlassian");
+    DataSourceResolution otherResolution =
+        new DataSourceResolution(
+            new VendorResolution("jira", "Jira", VendorCategory.ITSM, "atlassian", "Atlassian"),
+            "Jira");
 
     // Act — mutate the source map AFTER constructing the snapshot
     sourceMap.put(
@@ -163,8 +171,8 @@ class MapBackedVendorMappingSnapshotTest {
         otherResolution);
 
     // Assert — the snapshot must not see the post-construction insertion
-    VendorResolution result =
+    DataSourceResolution result =
         snapshot.lookup(ProductName.INSIGHT_CONNECT, SourceType.PLUGIN_NAME, "jira");
-    assertThat(result).isSameAs(VendorResolution.unknown());
+    assertThat(result).isSameAs(DataSourceResolution.unknown());
   }
 }
