@@ -26,7 +26,7 @@ spec:
             - product: InsightConnect
               source_type: plugin_name
               source_value: rapid7_insightconnect_microsoft_defender
-              display_name: Microsoft Defender
+              display_name: Microsoft Defender (InsightConnect)
     - id: atlassian
       name: Atlassian
       services:

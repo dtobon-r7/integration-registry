@@ -64,7 +64,7 @@ class MvpSeedBundleTest {
     assertThat(resolution.identity().vendorCategory()).isEqualTo(VendorCategory.EDR);
     assertThat(resolution.identity().vendorId()).isEqualTo("microsoft");
     assertThat(resolution.identity().vendorName()).isEqualTo("Microsoft");
-    assertThat(resolution.displayName()).isEqualTo("Microsoft Defender");
+    assertThat(resolution.displayName()).isEqualTo("Microsoft Defender (InsightConnect)");
   }
 
   @Test
