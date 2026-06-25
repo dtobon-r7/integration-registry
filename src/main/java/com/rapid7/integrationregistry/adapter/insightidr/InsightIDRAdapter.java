@@ -124,6 +124,14 @@ public class InsightIDRAdapter implements IntegrationAdapter {
       log.warn("Skipping InsightIDR event source with missing id (name='{}')", src.name());
       return false;
     }
+    if (!StringUtils.hasText(src.productType()) && !StringUtils.hasText(src.productName())) {
+      log.warn(
+          "Skipping InsightIDR event source '{}' (name='{}') with no productType or productName — "
+              + "cannot resolve a source identifier",
+          src.id(),
+          src.name());
+      return false;
+    }
     return true;
   }
 

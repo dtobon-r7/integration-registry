@@ -47,7 +47,12 @@ public class BoundedDetailFetcher {
 
   private static <R> Callable<R> guarded(Semaphore permits, Callable<R> task) {
     return () -> {
-      permits.acquire();
+      try {
+        permits.acquire();
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new IllegalStateException("Interrupted while acquiring permit for detail fetch", e);
+      }
       try {
         return task.call();
       } finally {

@@ -7,6 +7,17 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 
+/**
+ * Unit tests for {@link BoundedDetailFetcher}.
+ *
+ * <p><b>Interrupt handling note:</b> The {@code guarded()} method's interrupt path (restoring the
+ * interrupt flag when {@code acquire()} throws {@code InterruptedException}) is covered by
+ * inspection rather than a test. Creating a deterministic test would require pre-interrupting the
+ * calling thread or interrupting mid-acquire, both of which introduce race conditions and
+ * flakiness. The existing {@code await()} method already has a tested interrupt-restoration path
+ * (line 71-72) demonstrating the pattern; the {@code guarded()} interrupt handling follows the same
+ * idiom.
+ */
 class BoundedDetailFetcherTest {
 
   private final BoundedDetailFetcher fetcher = new BoundedDetailFetcher();

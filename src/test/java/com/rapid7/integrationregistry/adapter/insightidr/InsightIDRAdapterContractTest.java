@@ -288,4 +288,37 @@ class InsightIDRAdapterContractTest {
     assertThat(result.integrations()).hasSize(50);
     h.server().verify();
   }
+
+  @Test
+  void fetch_shouldSkipSourceWithNoIdentifiers_andWarn() throws Exception {
+    Harness h = harness();
+    stubSearch(h.server(), "search-no-identifiers.json");
+    // Only stub the detail call for the valid source; the skipped one must never be fetched
+    stubDetail(h.server(), "es-valid-0001", "detail-healthy.json");
+
+    Logger logger = (Logger) LoggerFactory.getLogger(InsightIDRAdapter.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      FetchResult result = h.adapter().fetch(ORG_ID, new HttpHeaders());
+
+      // Only the valid source should be present
+      assertThat(result.integrations()).hasSize(1);
+      assertThat(result.integrations().get(0).integrationId()).isEqualTo("es-valid-0001");
+
+      // The skipped source should not appear
+      assertThat(result.integrations()).noneMatch(n -> n.integrationId().equals("es-noid-0002"));
+
+      // A WARN must have been logged mentioning the skipped source's id
+      assertThat(appender.list)
+          .filteredOn(e -> e.getLevel() == Level.WARN)
+          .extracting(ILoggingEvent::getFormattedMessage)
+          .anySatisfy(m -> assertThat(m).contains("es-noid-0002"));
+    } finally {
+      logger.detachAppender(appender);
+      appender.stop();
+    }
+    h.server().verify();
+  }
 }
