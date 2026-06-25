@@ -36,8 +36,29 @@ public class InsightIDRClientConfig {
         .build();
   }
 
+  /**
+   * The HTTP boundary for the event-sources API, wrapping the {@link RestClient} above. Owns the
+   * search + detail calls and their exception mapping, keeping {@code InsightIDRAdapter} focused on
+   * orchestration and normalization.
+   */
+  @Bean
+  public EventSourceClient eventSourceClient(RestClient insightIDRRestClient) {
+    return new EventSourceClient(insightIDRRestClient);
+  }
+
   @Bean
   public EventSourceStatusMapper eventSourceStatusMapper() {
     return new EventSourceStatusMapper();
+  }
+
+  /**
+   * The bounded-concurrency detail-fetch helper. Stateless and thread-safe, so a single shared
+   * instance is correct; exposed here (rather than as a {@code @Component}) to keep it
+   * framework-free and unit-testable in isolation, mirroring how {@link EventSourceStatusMapper} is
+   * declared.
+   */
+  @Bean
+  public BoundedDetailFetcher boundedDetailFetcher() {
+    return new BoundedDetailFetcher();
   }
 }

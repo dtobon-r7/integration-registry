@@ -13,14 +13,10 @@ import java.time.Instant;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
-import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.HttpServerErrorException;
-import org.springframework.web.client.ResourceAccessException;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientException;
 
 /**
  * InsightIDR adapter. Implements the RFC-001 §InsightIDRAdapter two-call pattern: a {@code
@@ -29,9 +25,23 @@ import org.springframework.web.client.RestClientException;
  * bounded {@link BoundedDetailFetcher}, so the N+1 cost is contained inside the adapter and never
  * escapes to the T07 coordinator.
  *
- * <p>Per ADR-002 outbound calls use {@link RestClient}. The adapter emits the raw {@code
- * (source_type, source_value)} identifier only — vendor resolution is the aggregator's job (T08).
+ * <p>The HTTP transport (and its {@code RestClient} exception mapping) lives in {@link
+ * EventSourceClient}; this adapter owns orchestration, status normalization, source-identifier
+ * resolution, and {@code configuration_url} templating. Per ADR-002 the calls are blocking. The
+ * adapter emits the raw {@code (source_type, source_value)} identifier only — vendor resolution is
+ * the aggregator's job (T08).
  */
+// CouplingBetweenObjects: orchestrating the two-call pattern legitimately touches the contract
+// types (FetchResult, NormalizedIntegration, SourceIdentifier, IntegrationStatus), all three
+// adapter exceptions (each mapped to a distinct outcome — auth aborts the fetch, transient maps a
+// source to missing_data), its four collaborators (EventSourceClient, EventSourceStatusMapper,
+// BoundedDetailFetcher, InsightIDRProperties), and the injected Clock — pushing CBO just past the
+// project threshold of 15 even after the transport was extracted to EventSourceClient. The HTTP
+// surface already lives in a separate class; splitting orchestration further would scatter cohesive
+// logic to satisfy a metric. Suppressed locally and justified rather than weakening the
+// project-wide
+// threshold, mirroring the precedent on FanOutCoordinator and VendorAggregator (ADR-003).
+@SuppressWarnings("PMD.CouplingBetweenObjects")
 @Component
 public class InsightIDRAdapter implements IntegrationAdapter {
 
@@ -42,11 +52,7 @@ public class InsightIDRAdapter implements IntegrationAdapter {
   static final String SOURCE_TYPE_PRODUCT_TYPE = "product_type";
   static final String SOURCE_TYPE_PRODUCT_NAME = "product_name";
 
-  private static final String SEARCH_PATH =
-      "/api/3/organizations/{orgId}/eventsources/search?query=";
-  private static final String DETAIL_PATH = "/api/3/organizations/{orgId}/eventsources/{id}";
-
-  private final RestClient restClient;
+  private final EventSourceClient client;
   private final EventSourceStatusMapper statusMapper;
   private final BoundedDetailFetcher detailFetcher;
   private final InsightIDRProperties properties;
@@ -55,25 +61,29 @@ public class InsightIDRAdapter implements IntegrationAdapter {
   /**
    * Spring's injection path: the clock defaults to {@link Clock#systemUTC()}. Staleness is computed
    * against this clock, not a hard-coded {@code Instant.now()}, so it stays testable.
+   * {@code @Autowired} marks this as the constructor Spring uses — without it, the second
+   * (clock-injecting) constructor makes the bean ambiguous and Spring falls back to a non-existent
+   * no-arg constructor.
    */
+  @Autowired
   public InsightIDRAdapter(
-      RestClient insightIDRRestClient,
+      EventSourceClient client,
       EventSourceStatusMapper statusMapper,
       BoundedDetailFetcher detailFetcher,
       InsightIDRProperties properties) {
-    this(insightIDRRestClient, statusMapper, detailFetcher, properties, Clock.systemUTC());
+    this(client, statusMapper, detailFetcher, properties, Clock.systemUTC());
   }
 
   /**
    * Test seam: inject a fixed {@link Clock} so staleness against pinned fixtures is deterministic.
    */
   InsightIDRAdapter(
-      RestClient insightIDRRestClient,
+      EventSourceClient client,
       EventSourceStatusMapper statusMapper,
       BoundedDetailFetcher detailFetcher,
       InsightIDRProperties properties,
       Clock clock) {
-    this.restClient = insightIDRRestClient;
+    this.client = client;
     this.statusMapper = statusMapper;
     this.detailFetcher = detailFetcher;
     this.properties = properties;
@@ -89,7 +99,7 @@ public class InsightIDRAdapter implements IntegrationAdapter {
   public FetchResult fetch(String orgId, HttpHeaders authHeaders)
       throws AdapterTimeoutException, AdapterAuthException, AdapterUpstreamException {
     Instant fetchedAt = Instant.now(clock);
-    List<EventSourceSearchDto> searchResults = search(orgId, authHeaders);
+    List<EventSourceSearchDto> searchResults = client.search(orgId, authHeaders);
 
     List<EventSourceSearchDto> usable =
         searchResults.stream().filter(this::isNormalizable).toList();
@@ -117,31 +127,6 @@ public class InsightIDRAdapter implements IntegrationAdapter {
     return true;
   }
 
-  private List<EventSourceSearchDto> search(String orgId, HttpHeaders authHeaders)
-      throws AdapterTimeoutException, AdapterAuthException, AdapterUpstreamException {
-    try {
-      EventSourceSearchDto[] body =
-          restClient
-              .get()
-              .uri(SEARCH_PATH, orgId)
-              .headers(h -> h.addAll(authHeaders))
-              .retrieve()
-              .body(EventSourceSearchDto[].class);
-      return body == null ? List.of() : List.of(body);
-    } catch (HttpClientErrorException e) {
-      throwClientError("search", e);
-      throw new IllegalStateException("unreachable: throwClientError always throws");
-    } catch (HttpServerErrorException e) {
-      throw new AdapterUpstreamException("InsightIDR search 5xx: " + e.getStatusCode(), e);
-    } catch (ResourceAccessException e) {
-      throw new AdapterTimeoutException(
-          "InsightIDR search failed (timeout/transport): " + e.getMessage(), e);
-    } catch (RestClientException e) {
-      throw new AdapterUpstreamException(
-          "InsightIDR search response could not be processed: " + e.getMessage(), e);
-    }
-  }
-
   /**
    * Normalize one event source. Fetches its detail; a per-source timeout/5xx maps the source to
    * {@code missing_data} (the source stays visible, the IDR view stays available). An auth failure
@@ -154,7 +139,7 @@ public class InsightIDRAdapter implements IntegrationAdapter {
     Instant lastSuccess;
     String apiReturnedUrl = null;
     try {
-      EventSourceDetailsDto detail = detail(orgId, src.id(), authHeaders);
+      EventSourceDetailsDto detail = client.detail(orgId, src.id(), authHeaders);
       apiReturnedUrl = detail.configurationUrl();
       status =
           statusMapper.deriveStatus(
@@ -201,45 +186,6 @@ public class InsightIDRAdapter implements IntegrationAdapter {
         src.name(),
         src.productName());
     return new SourceIdentifier(SOURCE_TYPE_PRODUCT_NAME, src.productName());
-  }
-
-  private EventSourceDetailsDto detail(String orgId, String id, HttpHeaders authHeaders)
-      throws AdapterTimeoutException, AdapterAuthException, AdapterUpstreamException {
-    try {
-      return restClient
-          .get()
-          .uri(DETAIL_PATH, orgId, id)
-          .headers(h -> h.addAll(authHeaders))
-          .retrieve()
-          .body(EventSourceDetailsDto.class);
-    } catch (HttpClientErrorException e) {
-      throwClientError("detail", e);
-      throw new IllegalStateException("unreachable: throwClientError always throws");
-    } catch (HttpServerErrorException e) {
-      throw new AdapterUpstreamException("InsightIDR detail 5xx: " + e.getStatusCode(), e);
-    } catch (ResourceAccessException e) {
-      throw new AdapterTimeoutException(
-          "InsightIDR detail failed (timeout/transport): " + e.getMessage(), e);
-    } catch (RestClientException e) {
-      throw new AdapterUpstreamException(
-          "InsightIDR detail response could not be processed: " + e.getMessage(), e);
-    }
-  }
-
-  /**
-   * Map a 4xx to the matching adapter exception, preserving the cause: 401/403 are auth failures;
-   * every other 4xx is upstream-broken (the contract exposes no distinct 4xx signal). Always throws
-   * — mirrors {@code InsightConnectAdapter.throwClientError}. {@code phase} is "search" or "detail"
-   * for diagnostics.
-   */
-  private static void throwClientError(String phase, HttpClientErrorException e)
-      throws AdapterAuthException, AdapterUpstreamException {
-    int code = e.getStatusCode().value();
-    if (code == 401 || code == 403) {
-      throw new AdapterAuthException(
-          "InsightIDR " + phase + " auth failure: " + e.getStatusCode(), e);
-    }
-    throw new AdapterUpstreamException("InsightIDR " + phase + " 4xx: " + e.getStatusCode(), e);
   }
 
   private String configurationUrl(String id, String apiReturnedUrl) {

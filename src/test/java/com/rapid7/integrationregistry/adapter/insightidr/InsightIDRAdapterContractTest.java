@@ -67,7 +67,11 @@ class InsightIDRAdapterContractTest {
             5);
     InsightIDRAdapter adapter =
         new InsightIDRAdapter(
-            client, new EventSourceStatusMapper(), new BoundedDetailFetcher(), props, FIXED_CLOCK);
+            new EventSourceClient(client),
+            new EventSourceStatusMapper(),
+            new BoundedDetailFetcher(),
+            props,
+            FIXED_CLOCK);
     return new Harness(adapter, server);
   }
 

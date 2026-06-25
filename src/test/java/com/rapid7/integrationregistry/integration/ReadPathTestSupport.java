@@ -151,6 +151,10 @@ abstract class ReadPathTestSupport
     // defaults and fail-fast at binding, so they must be supplied.
     registry.add("integration-registry.insightconnect.base-url", () -> "http://icon.test.local");
     registry.add("integration-registry.insightconnect.icon-base", () -> "http://icon.test.local");
+    // InsightIDRClientConfig also boots even with the IDR adapter replaced by a stub; its
+    // base-url/idr-base have no defaults and fail-fast at binding, so supply them too.
+    registry.add("integration-registry.insightidr.base-url", () -> "http://idr.test.local");
+    registry.add("integration-registry.insightidr.idr-base", () -> "http://idr.test.local");
   }
 
   @AfterAll
