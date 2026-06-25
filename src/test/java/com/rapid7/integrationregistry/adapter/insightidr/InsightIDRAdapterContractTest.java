@@ -67,7 +67,7 @@ class InsightIDRAdapterContractTest {
             5);
     InsightIDRAdapter adapter =
         new InsightIDRAdapter(
-            new EventSourceClient(client),
+            new EventSourceClient(client, client),
             new EventSourceStatusMapper(),
             new BoundedDetailFetcher(),
             props,
@@ -277,7 +277,7 @@ class InsightIDRAdapterContractTest {
   }
 
   @Test
-  void fetch_shouldBoundDetailConcurrency_whenManySources() throws Exception {
+  void fetch_shouldFetchAndNormalizeAllSources_whenManySources() throws Exception {
     Harness h = harness();
     stubSearch(h.server(), "search-multi.json");
     // MockRestServiceServer is single-threaded for matching; stub every detail id es-100..es-149.

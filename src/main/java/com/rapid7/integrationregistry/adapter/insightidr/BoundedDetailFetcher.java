@@ -15,7 +15,8 @@ import java.util.function.Function;
  * virtual-thread-per-task executor, capping the number in flight at {@code concurrency} via a
  * {@link Semaphore}. Results preserve input order. This is a pure concurrency primitive: the
  * per-call timeout and exception classification live in the caller's {@code call} lambda (the IDR
- * adapter builds a per-detail-call timeout into its {@code RestClient}).
+ * adapter's detail RestClient carries the per-detail read timeout; search uses the per-adapter
+ * timeout).
  *
  * <p>Stateless and thread-safe — registered as a singleton bean and shared across fetches.
  */

@@ -15,8 +15,7 @@ import org.junit.jupiter.api.Test;
  * inspection rather than a test. Creating a deterministic test would require pre-interrupting the
  * calling thread or interrupting mid-acquire, both of which introduce race conditions and
  * flakiness. The existing {@code await()} method already has a tested interrupt-restoration path
- * (line 71-72) demonstrating the pattern; the {@code guarded()} interrupt handling follows the same
- * idiom.
+ * demonstrating the pattern; the {@code guarded()} interrupt handling follows the same idiom.
  */
 class BoundedDetailFetcherTest {
 

@@ -9,21 +9,23 @@ import org.springframework.web.client.RestClient;
 
 /**
  * Spring configuration for the InsightIDR adapter. Activates {@link InsightIDRProperties} and
- * exposes a {@link RestClient} bean built with the configured base URL and connect/read timeout,
- * plus the pure {@link EventSourceStatusMapper} as a framework-free {@code @Bean} (mirrors {@code
- * InsightConnectClientConfig}).
+ * exposes two {@link RestClient} beans built with the configured base URL and connect/read
+ * timeouts, plus the pure {@link EventSourceStatusMapper} as a framework-free {@code @Bean}
+ * (mirrors {@code InsightConnectClientConfig}).
  *
- * <p>The search call's timeout lives on this client. Per-detail-call timeouts are applied by the
- * adapter on each detail request via {@code RestClient}'s per-request settings; the bounded
- * concurrency is handled by {@link BoundedDetailFetcher}.
+ * <p>The search call uses {@code insightIDRRestClient} with the per-adapter timeout (15s default).
+ * Detail calls use {@code insightIDRDetailRestClient} with the per-detail-call timeout (2s
+ * default). Both clients share the pooled {@link HttpClient} for connection reuse; the timeout
+ * differentiation lives on the per-client {@link JdkClientHttpRequestFactory}. Bounded concurrency
+ * is handled by {@link BoundedDetailFetcher}.
  */
 @Configuration
 @EnableConfigurationProperties(InsightIDRProperties.class)
 public class InsightIDRClientConfig {
 
-  // Long-lived HttpClient backing the singleton RestClient bean — pools connections across the
+  // Long-lived HttpClient backing the two RestClient beans — pools connections across the
   // per-fetch search + detail calls. Closing it would defeat pooling; its lifecycle is the
-  // context's.
+  // context's. Both factories share this pooled client but apply distinct read timeouts.
   @SuppressWarnings("PMD.CloseResource")
   @Bean
   public RestClient insightIDRRestClient(InsightIDRProperties properties) {
@@ -37,13 +39,31 @@ public class InsightIDRClientConfig {
   }
 
   /**
-   * The HTTP boundary for the event-sources API, wrapping the {@link RestClient} above. Owns the
-   * search + detail calls and their exception mapping, keeping {@code InsightIDRAdapter} focused on
-   * orchestration and normalization.
+   * Detail-call {@link RestClient} with the per-detail-call read timeout (2s default). Shares the
+   * pooled {@link HttpClient} connection pool with {@code insightIDRRestClient} but applies the
+   * shorter timeout configured for per-source detail fetches.
+   */
+  @SuppressWarnings("PMD.CloseResource")
+  @Bean
+  public RestClient insightIDRDetailRestClient(InsightIDRProperties properties) {
+    HttpClient httpClient = HttpClient.newBuilder().connectTimeout(properties.timeout()).build();
+    JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+    requestFactory.setReadTimeout(properties.detailTimeout());
+    return RestClient.builder()
+        .baseUrl(properties.baseUrl())
+        .requestFactory(requestFactory)
+        .build();
+  }
+
+  /**
+   * The HTTP boundary for the event-sources API, wrapping the two {@link RestClient} beans above.
+   * Owns the search + detail calls and their exception mapping, keeping {@code InsightIDRAdapter}
+   * focused on orchestration and normalization.
    */
   @Bean
-  public EventSourceClient eventSourceClient(RestClient insightIDRRestClient) {
-    return new EventSourceClient(insightIDRRestClient);
+  public EventSourceClient eventSourceClient(
+      RestClient insightIDRRestClient, RestClient insightIDRDetailRestClient) {
+    return new EventSourceClient(insightIDRRestClient, insightIDRDetailRestClient);
   }
 
   @Bean

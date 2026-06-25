@@ -31,10 +31,12 @@ class EventSourceClient {
       "/api/3/organizations/{orgId}/eventsources/search?query=";
   private static final String DETAIL_PATH = "/api/3/organizations/{orgId}/eventsources/{id}";
 
-  private final RestClient restClient;
+  private final RestClient searchClient;
+  private final RestClient detailClient;
 
-  EventSourceClient(RestClient restClient) {
-    this.restClient = restClient;
+  EventSourceClient(RestClient searchClient, RestClient detailClient) {
+    this.searchClient = searchClient;
+    this.detailClient = detailClient;
   }
 
   /** Search (list) call — lightweight rows, no health. Empty list when the body is absent. */
@@ -44,9 +46,12 @@ class EventSourceClient {
         execute(
             "search",
             () ->
-                restClient
+                searchClient
                     .get()
                     .uri(SEARCH_PATH, orgId)
+                    // Inbound X-IPIMS-* identity headers (Class 3 Layer B) are forwarded as-is.
+                    // Canonical Layer A service-identity headers will be attached by track-10's
+                    // Class3HeaderAttacher once it lands.
                     .headers(h -> h.addAll(authHeaders))
                     .retrieve()
                     .body(EventSourceSearchDto[].class));
@@ -59,9 +64,12 @@ class EventSourceClient {
     return execute(
         "detail",
         () ->
-            restClient
+            detailClient
                 .get()
                 .uri(DETAIL_PATH, orgId, id)
+                // Inbound X-IPIMS-* identity headers (Class 3 Layer B) are forwarded as-is.
+                // Canonical Layer A service-identity headers will be attached by track-10's
+                // Class3HeaderAttacher once it lands.
                 .headers(h -> h.addAll(authHeaders))
                 .retrieve()
                 .body(EventSourceDetailsDto.class));
