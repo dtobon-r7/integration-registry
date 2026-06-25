@@ -47,8 +47,9 @@ public class EventSourceStatusMapper {
     if (ERROR_STATUSES.contains(normalized) || isFatalIssue(issue)) {
       return IntegrationStatus.ERROR;
     }
-    // missing_data: no successful activity ever recorded (null always wins over the threshold).
-    if (lastActive == null) {
+    // missing_data: no successful activity ever recorded (null) OR stale beyond the threshold.
+    // Both triggers evaluated here to ensure missing_data outranks warning and disabled.
+    if (lastActive == null || isStale(lastActive, now, stalenessThreshold)) {
       return IntegrationStatus.MISSING_DATA;
     }
     // warning: a present, non-fatal issue.
@@ -58,10 +59,6 @@ public class EventSourceStatusMapper {
     // disabled: intentionally inactive.
     if (DISABLED_STATUSES.contains(normalized)) {
       return IntegrationStatus.DISABLED;
-    }
-    // missing_data: configured but stale beyond the threshold.
-    if (isStale(lastActive, now, stalenessThreshold)) {
-      return IntegrationStatus.MISSING_DATA;
     }
     // healthy: operational status AND fresh activity.
     if (HEALTHY_STATUSES.contains(normalized)) {

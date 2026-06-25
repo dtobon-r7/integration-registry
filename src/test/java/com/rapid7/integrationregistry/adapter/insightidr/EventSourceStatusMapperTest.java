@@ -118,4 +118,40 @@ class EventSourceStatusMapperTest {
     assertThat(mapper.deriveStatus("Error", null, stale, NOW, THRESHOLD))
         .isEqualTo(IntegrationStatus.ERROR);
   }
+
+  @Test
+  void deriveStatus_shouldReturnMissingData_whenPausedButStale() {
+    // Precedence: missing_data > disabled. A paused source with stale lastActive should return
+    // MISSING_DATA.
+    long stale = epochMillis("2026-06-23T06:00:00Z"); // ~54h ago
+    assertThat(mapper.deriveStatus("Paused", null, stale, NOW, THRESHOLD))
+        .isEqualTo(IntegrationStatus.MISSING_DATA);
+  }
+
+  @Test
+  void deriveStatus_shouldReturnMissingData_whenIssuePresentButStale() {
+    // Precedence: missing_data > warning. A source with a non-fatal issue but stale lastActive
+    // should return MISSING_DATA.
+    long stale = epochMillis("2026-06-23T06:00:00Z"); // ~54h ago
+    EventSourceIssueDto issue = new EventSourceIssueDto("WARNING", "slow", null);
+    assertThat(mapper.deriveStatus("Active", issue, stale, NOW, THRESHOLD))
+        .isEqualTo(IntegrationStatus.MISSING_DATA);
+  }
+
+  @Test
+  void deriveStatus_shouldReturnMissingData_whenIssuePresentButLastActiveNull() {
+    // Precedence: missing_data > warning. A source with a non-fatal issue but null lastActive
+    // should return MISSING_DATA.
+    EventSourceIssueDto issue = new EventSourceIssueDto("WARNING", "slow", null);
+    assertThat(mapper.deriveStatus("Active", issue, null, NOW, THRESHOLD))
+        .isEqualTo(IntegrationStatus.MISSING_DATA);
+  }
+
+  @Test
+  void deriveStatus_shouldReturnDisabled_whenPausedAndFresh() {
+    // Confirm disabled still works when lastActive is fresh.
+    long fresh = epochMillis("2026-06-25T06:00:00Z"); // 6h ago
+    assertThat(mapper.deriveStatus("Paused", null, fresh, NOW, THRESHOLD))
+        .isEqualTo(IntegrationStatus.DISABLED);
+  }
 }
