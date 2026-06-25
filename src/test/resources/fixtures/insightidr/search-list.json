@@ -1,0 +1,16 @@
+[
+  {
+    "id": "es-0001-0001-0001",
+    "rrn": "rrn:logsearch:us:1f78ace5-bdef-4512-abed-4c96548dc043:eventsource:es-0001-0001-0001",
+    "name": "Microsoft Defender for Endpoint — Primary",
+    "productType": "MICROSOFT_DEFENDER",
+    "productName": "Microsoft Defender for Endpoint"
+  },
+  {
+    "id": "es-0002-0002-0002",
+    "rrn": "rrn:logsearch:us:1f78ace5-bdef-4512-abed-4c96548dc043:eventsource:es-0002-0002-0002",
+    "name": "Microsoft Defender for Endpoint — Backup",
+    "productType": "MICROSOFT_DEFENDER",
+    "productName": "Microsoft Defender for Endpoint"
+  }
+]
