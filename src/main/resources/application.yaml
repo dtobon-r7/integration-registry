@@ -45,6 +45,13 @@ integration-registry:
     # base-url and icon-base come from the deploy environment (no defaults —
     # absent config fails fast at binding).
     timeout: 5s
+  insightidr:
+    # base-url (CMS event-sources API) and idr-base (configuration_url deep-link base) come from
+    # the deploy environment (no defaults — absent config fails fast at binding).
+    timeout: 15s              # search / per-adapter (RFC-001 §Fan-out starting point)
+    detail-timeout: 2s        # per-detail-call (RFC-001 §Fan-out starting point)
+    staleness-threshold: 24h  # lastActive older than this -> missing_data
+    detail-concurrency: 60    # bounded detail-fetch pool (RFC-001 §Fan-out starting point)
 
 ---
 spring:
