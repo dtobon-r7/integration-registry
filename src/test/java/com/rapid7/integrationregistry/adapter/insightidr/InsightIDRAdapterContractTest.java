@@ -274,6 +274,7 @@ class InsightIDRAdapterContractTest {
         .andRespond(MockRestResponseCreators.withStatus(HttpStatus.FORBIDDEN));
     assertThatThrownBy(() -> h.adapter().fetch(ORG_ID, new HttpHeaders()))
         .isInstanceOf(AdapterAuthException.class);
+    h.server().verify();
   }
 
   @Test

@@ -23,14 +23,24 @@ import org.springframework.web.client.RestClient;
 @EnableConfigurationProperties(InsightIDRProperties.class)
 public class InsightIDRClientConfig {
 
-  // Long-lived HttpClient backing the two RestClient beans — pools connections across the
-  // per-fetch search + detail calls. Closing it would defeat pooling; its lifecycle is the
-  // context's. Both factories share this pooled client but apply distinct read timeouts.
+  /**
+   * The single long-lived {@link HttpClient} backing both {@link RestClient} beans — one connection
+   * pool reused across the per-fetch search and detail calls. Closing it would defeat pooling; its
+   * lifecycle is the application context's, not a method's. The connect timeout lives here; the
+   * differing per-call read timeouts live on each bean's {@link JdkClientHttpRequestFactory}.
+   */
   @SuppressWarnings("PMD.CloseResource")
   @Bean
-  public RestClient insightIDRRestClient(InsightIDRProperties properties) {
-    HttpClient httpClient = HttpClient.newBuilder().connectTimeout(properties.timeout()).build();
-    JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+  public HttpClient insightIDRHttpClient(InsightIDRProperties properties) {
+    return HttpClient.newBuilder().connectTimeout(properties.timeout()).build();
+  }
+
+  /** Search-call {@link RestClient} with the per-adapter read timeout (15s default). */
+  @Bean
+  public RestClient insightIDRRestClient(
+      HttpClient insightIDRHttpClient, InsightIDRProperties properties) {
+    JdkClientHttpRequestFactory requestFactory =
+        new JdkClientHttpRequestFactory(insightIDRHttpClient);
     requestFactory.setReadTimeout(properties.timeout());
     return RestClient.builder()
         .baseUrl(properties.baseUrl())
@@ -40,14 +50,14 @@ public class InsightIDRClientConfig {
 
   /**
    * Detail-call {@link RestClient} with the per-detail-call read timeout (2s default). Shares the
-   * pooled {@link HttpClient} connection pool with {@code insightIDRRestClient} but applies the
+   * {@code insightIDRHttpClient} connection pool with {@code insightIDRRestClient} but applies the
    * shorter timeout configured for per-source detail fetches.
    */
-  @SuppressWarnings("PMD.CloseResource")
   @Bean
-  public RestClient insightIDRDetailRestClient(InsightIDRProperties properties) {
-    HttpClient httpClient = HttpClient.newBuilder().connectTimeout(properties.timeout()).build();
-    JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+  public RestClient insightIDRDetailRestClient(
+      HttpClient insightIDRHttpClient, InsightIDRProperties properties) {
+    JdkClientHttpRequestFactory requestFactory =
+        new JdkClientHttpRequestFactory(insightIDRHttpClient);
     requestFactory.setReadTimeout(properties.detailTimeout());
     return RestClient.builder()
         .baseUrl(properties.baseUrl())
