@@ -70,6 +70,10 @@ class VendorMappingBootIntegrationTest {
     // exercise the ICON adapter.
     registry.add("integration-registry.insightconnect.base-url", () -> "http://icon.test.local");
     registry.add("integration-registry.insightconnect.icon-base", () -> "http://icon.test.local");
+    // InsightIDR base-url/idr-base likewise have no defaults; supply them so the context loads.
+    // This test does not exercise the IDR adapter.
+    registry.add("integration-registry.insightidr.base-url", () -> "http://idr.test.local");
+    registry.add("integration-registry.insightidr.idr-base", () -> "http://idr.test.local");
   }
 
   @MockitoBean S3Client s3Client;

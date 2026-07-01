@@ -44,6 +44,10 @@ class IntegrationRegistryApplicationTests {
     // supply test values here, mirroring the vendor-mapping required props above.
     registry.add("integration-registry.insightconnect.base-url", () -> "http://icon.test.local");
     registry.add("integration-registry.insightconnect.icon-base", () -> "http://icon.test.local");
+    // InsightIDR base-url/idr-base likewise have no defaults — supply test values so the
+    // full-context boot can wire InsightIDRAdapter (the other insightidr.* knobs default).
+    registry.add("integration-registry.insightidr.base-url", () -> "http://idr.test.local");
+    registry.add("integration-registry.insightidr.idr-base", () -> "http://idr.test.local");
   }
 
   @MockitoBean S3Client s3Client;

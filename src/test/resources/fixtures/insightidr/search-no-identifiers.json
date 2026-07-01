@@ -1,0 +1,14 @@
+[
+  {
+    "id": "es-valid-0001",
+    "rrn": "rrn:logsearch:us:1f78ace5-bdef-4512-abed-4c96548dc043:eventsource:es-valid-0001",
+    "name": "Valid Source with productType",
+    "productType": "MICROSOFT_DEFENDER",
+    "productName": "Microsoft Defender for Endpoint"
+  },
+  {
+    "id": "es-noid-0002",
+    "rrn": "rrn:logsearch:us:1f78ace5-bdef-4512-abed-4c96548dc043:eventsource:es-noid-0002",
+    "name": "Malformed Source — no identifiers"
+  }
+]
